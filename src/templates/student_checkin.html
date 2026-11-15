@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}סימון נוכחות{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card" id="card">
+  <h1>{{ course }}</h1>
+  <p class="muted" id="status">סימון נוכחות</p>
+
+  <div id="idBox" {% if known_name %}hidden{% endif %}>
+    <label for="sid">מספר סטודנט / ת״ז</label>
+    <input id="sid" inputmode="numeric" autocomplete="off" placeholder="לדוגמה 100000001">
+    <p class="muted" style="font-size:.9rem">פעם אחת בלבד – הטלפון ייקשר אליך.</p>
+  </div>
+  {% if known_name %}<p style="font-size:1.15rem">שלום <strong>{{ known_name }}</strong></p>{% endif %}
+
+  <button class="full" id="go">סמן נוכחות</button>
+  <p id="msg" role="status"></p>
+</div></div>
+
+<script>
+const NONCE = {{ nonce|tojson }};
+const NEEDS_LOCATION = {{ needs_location|tojson }};
+const KNOWN = {{ (known_name is not none)|tojson }};
+const $ = id => document.getElementById(id);
+
+// Collect a few GPS readings (the server uses them for the geofence and for spoofing checks).
+function collectLocation(maxMs = 6000, wanted = 3) {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve({ samples: [], denied: true });
+    const samples = [];
+    let finished = false;
+    const done = denied => {
+      if (finished) return;
+      finished = true;
+      navigator.geolocation.clearWatch(watchId);
+      resolve({ samples, denied: denied && samples.length === 0 });
+    };
+    const watchId = navigator.geolocation.watchPosition(
+      p => {
+        samples.push({ lat: p.coords.latitude, lng: p.coords.longitude,
+                       accuracy: p.coords.accuracy, ts: p.timestamp / 1000 });
+        if (samples.length >= wanted) done(false);
+      },
+      () => done(true),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: maxMs });
+    setTimeout(() => done(samples.length === 0), maxMs);
+  });
+}
+
+$("go").addEventListener("click", async () => {
+  const msg = $("msg"), btn = $("go");
+  const sid = $("sid") ? $("sid").value.trim() : "";
+  if (!KNOWN && !sid) { msg.textContent = "יש להזין מספר סטודנט"; return; }
+  btn.disabled = true;
+  msg.textContent = NEEDS_LOCATION ? "מאמת מיקום… (אשרו גישה למיקום)" : "שולח…";
+  const loc = NEEDS_LOCATION ? await collectLocation() : { samples: [], denied: false };
+  try {
+    const res = await fetch("/api/checkin", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nonce: NONCE, student_id: sid, samples: loc.samples, denied: loc.denied })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      $("card").innerHTML = '<h1>✓ הנוכחות נרשמה</h1><p>' + data.name +
+        (data.duplicate ? '<br><span class="muted">כבר סומנת קודם בשיעור הזה.</span>' : '') + '</p>';
+    } else {
+      msg.textContent = data.error; btn.disabled = false;
+    }
+  } catch (e) {
+    msg.textContent = "שגיאת רשת, נסו שוב"; btn.disabled = false;
+  }
+});
+</script>
+{% endblock %}

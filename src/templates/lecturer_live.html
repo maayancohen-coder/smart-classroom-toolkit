@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ session.course }}{% endblock %}
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  .layout { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 20px;
+    max-width: 1200px; margin: 0 auto; padding: 20px; align-items: start; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  #qr img { width: 100%; height: auto; image-rendering: pixelated; border-radius: 8px; background: #fff; padding: 8px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+  .bar > div { height: 100%; background: var(--accent); width: 100%; }
+  .counts { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pill { padding: 6px 12px; border-radius: 999px; font-weight: 700; }
+  .pill.present { background: var(--ok-bg); color: var(--ok); }
+  .pill.suspect { background: var(--warn-bg); color: var(--warn); }
+  .pill.absent { background: var(--bad-bg); color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  td.notes { color: var(--muted); font-size: .9rem; }
+  .tag { padding: 2px 10px; border-radius: 999px; font-size: .85rem; font-weight: 700; white-space: nowrap; }
+  .tag.present { background: var(--ok-bg); color: var(--ok); }
+  .tag.suspect { background: var(--warn-bg); color: var(--warn); }
+  .tag.absent { background: var(--bad-bg); color: var(--bad); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .actions .btn, .actions button { font-size: .95rem; padding: 9px 14px; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="layout">
+  <div class="card">
+    <h1>{{ session.course }}</h1>
+    <p class="muted" id="hint">סרקו את הקוד כדי לסמן נוכחות</p>
+    <div id="qr"></div>
+    <div class="bar"><div id="timer"></div></div>
+    <div class="actions">
+      <a class="btn secondary" href="/api/session/{{ session.session_id }}/report.xlsx">Excel</a>
+      <a class="btn secondary" href="/api/session/{{ session.session_id }}/report.csv">CSV</a>
+      <button class="secondary" id="close">סגור שיעור</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="counts" id="counts"></div>
+    <table>
+      <thead><tr><th>סטטוס</th><th>שם</th><th>שעה</th><th>מרחק</th><th>הערות</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const SID = {{ session.session_id|tojson }};
+const PERIOD = {{ period }};
+const LABEL = { present: "נוכח", suspect: "חשוד", absent: "נעדר" };
+const $ = id => document.getElementById(id);
+let lastUrl = null, expiresAt = 0;
+
+async function refreshQr() {
+  const res = await fetch(`/api/session/${SID}/qr`);
+  if (!res.ok) return;
+  const d = await res.json();
+  expiresAt = Date.now() + d.expires_in * 1000;
+  if (d.closed) { $("qr").innerHTML = ""; $("hint").textContent = "השיעור נסגר"; return; }
+  if (d.url !== lastUrl) {
+    lastUrl = d.url;
+    const qr = qrcode(0, "M"); qr.addData(d.url); qr.make();
+    $("qr").innerHTML = qr.createImgTag(8, 2);
+  }
+}
+function tick() {
+  const left = Math.max(0, expiresAt - Date.now());
+  $("timer").style.width = (left / (PERIOD * 1000) * 100) + "%";
+  if (left <= 0) refreshQr();
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function refreshReport() {
+  const res = await fetch(`/api/session/${SID}/report`);
+  if (!res.ok) return;
+  const d = await res.json();
+  $("counts").innerHTML = ["present", "suspect", "absent"]
+    .map(k => `<span class="pill ${k}">${LABEL[k]}: ${d.counts[k]}</span>`).join("");
+  $("rows").innerHTML = d.rows.map(r => {
+    const t = r.time ? new Date(r.time * 1000).toLocaleTimeString("he-IL") : "";
+    return `<tr><td><span class="tag ${r.status}">${LABEL[r.status]}</span></td>
+      <td>${esc(r.name)}</td><td>${t}</td><td>${r.distance_m != null ? r.distance_m + " מ׳" : ""}</td>
+      <td class="notes">${esc(r.notes)}</td></tr>`;
+  }).join("");
+}
+$("close").onclick = async () => {
+  if (!confirm("לסגור את השיעור? לא ניתן יהיה לסמן נוכחות יותר.")) return;
+  await fetch(`/api/session/${SID}/close`, { method: "POST" });
+  refreshQr();
+};
+refreshQr(); refreshReport();
+setInterval(tick, 100);
+setInterval(refreshReport, 2000);
+</script>
+{% endblock %}

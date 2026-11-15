@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}פתיחת שיעור{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <h1>פתיחת שיעור</h1>
+  <p class="muted">לחיצה אחת, והמערכת עושה את השאר.</p>
+
+  <label for="course">שם הקורס</label>
+  <input id="course" value="Intro to Software Engineering">
+
+  <label>מיקום הכיתה</label>
+  <button class="secondary" id="loc" type="button">📍 השתמש במיקום שלי</button>
+  <p class="muted" id="locInfo" style="font-size:.9rem">לא הוגדר – בדיקת המיקום תיכבה.</p>
+
+  <label for="radius">רדיוס (מטרים)</label>
+  <input id="radius" type="number" min="20" value="{{ default_radius }}">
+
+  <button class="full" id="open">פתח שיעור</button>
+  <p id="msg"></p>
+</div></div>
+<script>
+let pos = null;
+const $ = id => document.getElementById(id);
+$("loc").onclick = () => {
+  $("locInfo").textContent = "מאתר…";
+  navigator.geolocation.getCurrentPosition(
+    p => { pos = p.coords; $("locInfo").textContent =
+      `נקלט (דיוק ±${Math.round(p.coords.accuracy)} מ׳)`; },
+    () => { $("locInfo").textContent = "לא התקבל אישור מיקום – בדיקת המיקום תיכבה."; },
+    { enableHighAccuracy: true, timeout: 10000 });
+};
+$("open").onclick = async () => {
+  $("open").disabled = true;
+  const res = await fetch("/api/session", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ course: $("course").value, radius: $("radius").value,
+                           lat: pos && pos.latitude, lng: pos && pos.longitude }) });
+  if (!res.ok) { $("msg").textContent = "שגיאה"; $("open").disabled = false; return; }
+  location.href = (await res.json()).url;
+};
+</script>
+{% endblock %}
