@@ -91,13 +91,15 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | FR-30 | The system shall accept one answer per student per poll and show live counts to the lecturer. | S |
 | FR-31 | The system shall suggest a poll question from the current slide using an LLM. | S |
 | FR-32 | The system shall let a student send a text comment and choose whether it is anonymous or carries their name. | S |
+| FR-32a | A comment sent during the lecture shall appear to the lecturer in real time. A comment sent after the lecture (offline) shall be stored with the session and be visible to the lecturer later. | S |
 | FR-33 | The system shall not store or show the identity of the author of an anonymous comment. | S |
 
 ### 2.7 Transcript and summary (UC13)
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-34 | The system shall let the lecturer upload a lecture recording and optional slides. | S |
+| FR-34 | The system shall let the lecturer upload a lecture recording (video or audio file, for example exported from Zoom, Meet or Google Classroom) and optional slides. | S |
+| FR-34a | If the recording is a video, the system shall extract its audio track before transcription. | S |
 | FR-35 | The system shall produce a transcript with an ASR service. | S |
 | FR-36 | The system shall correct the transcript with an LLM using the slides' text as a glossary of terms. | S |
 | FR-37 | The system shall produce a summary of the corrected transcript with an LLM. | S |
