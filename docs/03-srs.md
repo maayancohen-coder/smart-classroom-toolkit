@@ -180,6 +180,13 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 - Indoor location accuracy is limited to tens of meters.
 - External AI services are used for ASR, people counting and LLM tasks; the exact tools are selected in the tools report.
 
+### 4.1 Known limitations of device binding
+
+- The device identifier lives in a browser cookie (NFR-5). A student who opens the link in a **private window**, or clears the site data, gets a new identifier. With it they can enter the ID of a friend who is not yet bound to any phone, and device binding alone will not detect this.
+- What still catches it: the location check, the head-count gap (FR-23, FR-24) and the other weak signals. The head-count gap is the main defence, because the number of check-ins will exceed the number of people in the photo.
+- Planned weak signal (not strong, to avoid false accusations): several check-ins from the same network address and the same browser type within a few minutes are flagged for the lecturer.
+- This limitation is accepted for the scope of the exercise and is listed again in the testing strategy (section 8, findings).
+
 ## 5. Traceability
 
 | Use case | Requirements |

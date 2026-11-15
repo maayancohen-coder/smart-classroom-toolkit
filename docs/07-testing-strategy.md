@@ -101,7 +101,8 @@ Each scenario uses a separate simulated phone.
 | Honest student scans and checks in | PRESENT | FR-8, FR-12, FR-13 |
 | Student far from the classroom | SUSPECT, reason mentions distance | FR-12 |
 | Location denied | SUSPECT | NFR-19 |
-| Perfect, frozen location | SUSPECT | FR-12 |
+| Unrealistically perfect location (accuracy under 2 m) | SUSPECT | FR-12 |
+| Identical coordinates in every reading, realistic accuracy | PRESENT with a note (weak signal only) | FR-12 |
 | One phone, two students | The second is SUSPECT | FR-17 |
 | Same student, new phone | SUSPECT; after lecturer reset it is PRESENT | FR-17, FR-18 |
 | Token older than the window | Refused | FR-7 |
@@ -115,7 +116,7 @@ Each scenario uses a separate simulated phone.
 | Photo upload with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24 |
 | Comment sent anonymously | No author in the lecturer view | FR-33 |
 
-A first set of 18 of these scenario tests is already written and passing in the demo code.
+A first set of 19 of these scenario tests is already written and passing in the demo code.
 
 ## 7. Non-functional and AI-quality tests
 
@@ -159,6 +160,15 @@ A first set of 18 of these scenario tests is already written and passing in the 
 | 10 or more students check in at once | The sheet updates |
 | Photo of the real classroom gives a count | Within tolerance |
 | Secure link opens on a phone that is not on the lecturer's network | Works |
+
+### Findings from the first real-device run (iPhone, hosted demo)
+
+| Finding | Cause | Action |
+|---|---|---|
+| A real student was marked SUSPECT with "location frozen across readings". | A phone resting on a desk can report the same coordinates in every reading. | The check was made a **weak** signal; one weak failure alone no longer makes a student suspect. A scenario test covers it. |
+| Marking two students from one phone was not flagged at first. | The device identifier was new on each scan (hosted server had restarted, which clears memory). After a stable run the phone was recognised ("known device") and no second ID could be entered. | Keep the diagnostic device tag in the demo. Document the private-window limitation (SRS 4.1). |
+| The free hosting server sleeps after inactivity and forgets all data. | In-memory storage by design for the demo. | Open the page a few minutes before the demo; export the sheet to Excel or CSV before closing. |
+| Desktop browser location is only accurate to tens of meters (about 35 m error). | Indoor positioning. | Use a radius of 500 m in the demo; the QR and the photo count cover the room-level check. |
 
 A dry run of the 10-minute demo is performed once the day before.
 
