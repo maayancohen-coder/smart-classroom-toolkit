@@ -95,3 +95,33 @@ class ClaudeVisionCounter(PeopleCounter):
             raise CountingError("שירות הספירה לא זמין כרגע") from exc
         text = "".join(block.get("text", "") for block in payload.get("content", []) if block.get("type") == "text")
         return parse_count_reply(text)
+
+
+class GeminiVisionCounter(PeopleCounter):
+    """Counts with Google Gemini (has a free API tier) through its REST API, standard library only."""
+
+    def __init__(self, api_key: str, model: str, timeout: float = 45.0):
+        self.api_key = api_key
+        self.model = model
+        self.timeout = timeout
+
+    @property
+    def url(self) -> str:
+        return f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+
+    def count(self, image: bytes, mime: str) -> CountResult:
+        body = json.dumps({"contents": [{"parts": [
+            {"inline_data": {"mime_type": mime, "data": base64.b64encode(image).decode("ascii")}},
+            {"text": PROMPT},
+        ]}], "generationConfig": {"temperature": 0}}).encode("utf-8")
+        request = urllib.request.Request(self.url, data=body, method="POST", headers={
+            "content-type": "application/json", "x-goog-api-key": self.api_key})
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            raise CountingError("שירות הספירה לא זמין כרגע (ייתכן שהמכסה החינמית נגמרה)") from exc
+        parts = (payload.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+        result = parse_count_reply("".join(part.get("text", "") for part in parts))
+        result.method = "ai-vision (gemini)"
+        return result

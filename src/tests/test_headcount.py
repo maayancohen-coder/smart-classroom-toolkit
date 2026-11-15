@@ -3,7 +3,9 @@ import io
 
 import pytest
 
-from attendance.counting import CountingError, FakeCounter, parse_count_reply
+import json
+
+from attendance.counting import CountingError, FakeCounter, GeminiVisionCounter, parse_count_reply
 from test_flow import CLASSROOM, env, open_checkin, qr_path, status_of, submit  # noqa: F401
 
 FAR = [{"lat": 32.2, "lng": 34.9, "accuracy": 20}]  # far from the classroom -> suspect
@@ -109,3 +111,44 @@ def test_model_reply_is_parsed(reply, expected):
 def test_unusable_model_reply_raises(reply):
     with pytest.raises(CountingError):
         parse_count_reply(reply)
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return json.dumps(self.payload).encode("utf-8")
+
+
+def test_gemini_adapter_sends_image_and_parses_the_answer(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(request, timeout=None):
+        seen["url"], seen["headers"], seen["body"] = request.full_url, dict(request.header_items()), json.loads(request.data)
+        return _FakeResponse({"candidates": [{"content": {"parts": [
+            {"text": '{"count": 31, "confidence": "medium", "notes": "back rows partly hidden"}'}]}}]})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    result = GeminiVisionCounter("KEY", "some-model").count(b"\xff\xd8img", "image/jpeg")
+    assert result.count == 31 and result.confidence == "medium" and "gemini" in result.method
+    assert seen["url"].endswith("/models/some-model:generateContent")
+    assert seen["headers"]["X-goog-api-key"] == "KEY"           # key in a header, not in the URL
+    assert seen["body"]["contents"][0]["parts"][0]["inline_data"]["mime_type"] == "image/jpeg"
+
+
+def test_gemini_unreachable_is_reported_not_crashed(monkeypatch):
+    import urllib.error
+
+    def boom(request, timeout=None):
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+    with pytest.raises(CountingError):
+        GeminiVisionCounter("KEY", "m").count(b"x", "image/jpeg")

@@ -46,3 +46,6 @@ class Config:
     # Vision model used for counting. Without a key the lecturer can still type the count by hand.
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
     COUNTER_MODEL = os.environ.get("COUNTER_MODEL", "claude-sonnet-5-5")
+    # Free alternative: Google Gemini. Create a key in Google AI Studio and check the current model name there.
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")

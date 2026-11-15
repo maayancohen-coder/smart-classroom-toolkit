@@ -9,7 +9,7 @@ from flask import (Flask, Response, abort, jsonify, make_response, redirect, ren
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from attendance.config import Config
-from attendance.counting import ClaudeVisionCounter, CountingError, CountResult
+from attendance.counting import ClaudeVisionCounter, CountingError, CountResult, GeminiVisionCounter
 from attendance.models import LocationReport, LocationSample
 from attendance.report import to_csv, to_xlsx
 from attendance.repository import DeviceRegistry, Roster, SessionStore
@@ -19,6 +19,15 @@ from attendance.tokens import TokenService
 DEVICE_COOKIE = "did"
 LECTURER_COOKIE = "lk"
 ONE_YEAR = 60 * 60 * 24 * 365
+
+
+def build_counter(config):
+    """Pick the people counter from the configuration; None means manual entry only."""
+    if config.GEMINI_API_KEY:
+        return GeminiVisionCounter(config.GEMINI_API_KEY, config.GEMINI_MODEL)
+    if config.ANTHROPIC_API_KEY:
+        return ClaudeVisionCounter(config.ANTHROPIC_API_KEY, config.COUNTER_MODEL)
+    return None
 
 
 def create_app(config: type[Config] = Config, roster: Roster | None = None) -> Flask:
@@ -33,8 +42,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         DeviceRegistry(),
         SessionStore(),
         TokenService(config.TOKEN_PERIOD_SECONDS, config.TOKEN_GRACE_PERIODS),
-        counter=(ClaudeVisionCounter(config.ANTHROPIC_API_KEY, config.COUNTER_MODEL)
-                 if config.ANTHROPIC_API_KEY else None),
+        counter=build_counter(config),
     )
     app.extensions["attendance_service"] = service
 
