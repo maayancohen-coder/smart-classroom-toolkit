@@ -223,3 +223,13 @@ def test_campus_network_is_weak_signal_only(env):
     submit(phone, nonce, "100000001", headers={"X-Forwarded-For": "5.5.5.5"})
     row = status_of(lecturer, sid, "100000001")
     assert row["status"] == "present" and "campus network" in row["notes"]
+
+
+def test_frozen_realistic_location_alone_is_not_suspect(env):
+    app, _, lecturer, sid = env
+    phone = app.test_client()
+    nonce = open_checkin(phone, qr_path(lecturer, sid))
+    still = [{"lat": 32.08531, "lng": 34.78181, "accuracy": 20}] * 3  # phone resting on a desk
+    submit(phone, nonce, "100000001", samples=still)
+    row = status_of(lecturer, sid, "100000001")
+    assert row["status"] == "present" and "frozen" in row["notes"]

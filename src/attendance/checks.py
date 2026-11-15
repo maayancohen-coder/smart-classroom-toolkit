@@ -107,6 +107,17 @@ class LocationSpoofCheck(AttendanceCheck):
             return self._ok()  # missing location is the geofence's concern
         if any(s.accuracy < self.min_accuracy for s in samples):
             return self._fail("unrealistically precise location for indoors")
+        return self._ok()
+
+
+class FrozenLocationCheck(AttendanceCheck):
+    """Identical coordinates in every reading. Weak: a real phone that sits still, or a cached
+    network fix, can repeat the same position, so this alone must not make a student suspect."""
+    name = "location_frozen"
+    strong = False
+
+    def run(self, ctx: CheckContext) -> CheckResult:
+        samples = ctx.location.samples
         if len(samples) >= 3 and len({(s.lat, s.lng) for s in samples}) == 1:
             return self._fail("location frozen across readings")
         return self._ok()

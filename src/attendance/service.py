@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from .checks import (CheckContext, DeviceBindingCheck, GeofenceCheck, LocationSpoofCheck,
+from .checks import (CheckContext, DeviceBindingCheck, FrozenLocationCheck, GeofenceCheck, LocationSpoofCheck,
                      NetworkCheck, TokenFreshnessCheck)
 from .config import Config
 from .evaluator import AttendanceEvaluator
@@ -40,6 +40,7 @@ class AttendanceService:
             DeviceBindingCheck(registry),
             GeofenceCheck(config.MAX_LOCATION_ACCURACY_METERS),
             LocationSpoofCheck(config.MIN_PLAUSIBLE_ACCURACY_METERS),
+            FrozenLocationCheck(),
             NetworkCheck(),
         ])
 
