@@ -6,7 +6,9 @@ means adding a class here - the evaluator and the rest of the system do not chan
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import time
 from dataclasses import dataclass
+from typing import Optional
 
 from .geo import haversine_meters, ip_in_networks
 from .models import CheckInTicket, CheckResult, LectureSession, LocationReport, Student
@@ -21,6 +23,8 @@ class CheckContext:
     ticket: CheckInTicket
     location: LocationReport
     ip: str
+    fingerprint: str = ""            # hash of phone model / screen / language settings (not a secret)
+    client_now: Optional[float] = None  # the phone's clock when it submitted, to spot cached GPS fixes
 
 
 class AttendanceCheck(ABC):
@@ -134,3 +138,75 @@ class NetworkCheck(AttendanceCheck):
         if ip_in_networks(ctx.ip, ctx.session.trusted_networks):
             return self._ok()
         return self._fail("not on the campus network")
+
+
+class SharedFingerprintCheck(AttendanceCheck):
+    """The same phone profile already checked in as a different student. Weak: two phones of the same
+    model and settings look alike, but a private window on one phone looks exactly like this."""
+    name = "shared_phone_profile"
+    strong = False
+
+    def run(self, ctx: CheckContext) -> CheckResult:
+        if not ctx.fingerprint:
+            return self._ok()
+        for other in ctx.session.checkins.values():
+            if other.fingerprint == ctx.fingerprint and other.student.student_id != ctx.student.student_id:
+                return self._fail("same phone profile as another student's check-in")
+        return self._ok()
+
+
+class RapidRepeatCheck(AttendanceCheck):
+    """Same phone profile AND same network AND a few minutes apart, for a different student. Weak on its
+    own; together with the shared profile it is the signature of one phone checking in for two people."""
+    name = "rapid_repeat"
+    strong = False
+
+    def __init__(self, window_seconds: float):
+        self.window = window_seconds
+
+    def run(self, ctx: CheckContext) -> CheckResult:
+        if not ctx.fingerprint:
+            return self._ok()
+        now = time.time()
+        for other in ctx.session.checkins.values():
+            if (other.fingerprint == ctx.fingerprint and other.student.student_id != ctx.student.student_id
+                    and other.ip == ctx.ip and abs(now - other.at) <= self.window):
+                return self._fail(f"checked in {abs(now - other.at):.0f}s after another student from the "
+                                  "same phone profile and network (possible private window)")
+        return self._ok()
+
+
+class StaleLocationCheck(AttendanceCheck):
+    """A GPS fix that is old when the phone submits it was probably cached, not measured in this room."""
+    name = "stale_location"
+    strong = False
+
+    def __init__(self, max_age_seconds: float):
+        self.max_age = max_age_seconds
+
+    def run(self, ctx: CheckContext) -> CheckResult:
+        best = ctx.location.best()
+        if best is None or ctx.client_now is None:
+            return self._ok()
+        age = ctx.client_now - best.timestamp
+        if age > self.max_age:
+            return self._fail(f"location reading is {age:.0f}s old (possibly cached)")
+        return self._ok()
+
+
+class DuplicateCoordinatesCheck(AttendanceCheck):
+    """Two different students reporting exactly the same coordinates (6 decimals, about 10 cm). Real
+    phones never agree that closely; a shared fake-GPS position does."""
+    name = "duplicate_coordinates"
+    strong = True
+
+    def run(self, ctx: CheckContext) -> CheckResult:
+        best = ctx.location.best()
+        if best is None:
+            return self._ok()
+        key = (round(best.lat, 6), round(best.lng, 6))
+        for other in ctx.session.checkins.values():
+            if other.location and other.student.student_id != ctx.student.student_id \
+                    and (round(other.location.lat, 6), round(other.location.lng, 6)) == key:
+                return self._fail("exactly the same coordinates as another student")
+        return self._ok()

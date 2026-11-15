@@ -51,3 +51,9 @@ class Config:
     GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     # Counting a crowded photo can take a while with a "thinking" model.
     COUNTER_TIMEOUT_SECONDS = float(os.environ.get("COUNTER_TIMEOUT_SECONDS", 110))
+
+    # Location quality and cheating signals.
+    RAPID_REPEAT_SECONDS = _env_int("RAPID_REPEAT_SECONDS", 120)       # same phone profile + network, different student
+    STALE_FIX_SECONDS = _env_int("STALE_FIX_SECONDS", 60)             # a cached GPS fix older than this is suspicious
+    CLUSTER_MIN_POINTS = _env_int("CLUSTER_MIN_POINTS", 6)            # check-ins needed before the class group is trusted
+    CLUSTER_MIN_RADIUS_METERS = float(os.environ.get("CLUSTER_MIN_RADIUS_METERS", 30))

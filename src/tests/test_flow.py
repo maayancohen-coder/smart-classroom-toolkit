@@ -47,9 +47,20 @@ def open_checkin(phone, path, headers=None):
     return html[start:html.index(";", start)].strip().strip('"')
 
 
-def submit(phone, nonce, student_id, samples=SAMPLE_REAL, denied=False, headers=None):
-    return phone.post("/api/checkin", headers=headers or {}, json={
-        "nonce": nonce, "student_id": student_id, "samples": samples, "denied": denied})
+def near(student_id, dx=0.0):
+    """A realistic fix for this student: a few metres from everyone else, never identical."""
+    k = (int(student_id[-3:]) % 40) * 0.00001 + dx
+    return [{**s, "lat": s["lat"] + k, "lng": s["lng"] - k / 2} for s in SAMPLE_REAL]
+
+
+def submit(phone, nonce, student_id, samples=None, denied=False, headers=None, fp="", client_now=None):
+    body = {"nonce": nonce, "student_id": student_id,
+            "samples": near(student_id) if samples is None else samples, "denied": denied}
+    if fp:
+        body["fp"] = fp
+    if client_now is not None:
+        body["client_now"] = client_now
+    return phone.post("/api/checkin", headers=headers or {}, json=body)
 
 
 def status_of(lecturer, sid, student_id):
@@ -233,3 +244,59 @@ def test_frozen_realistic_location_alone_is_not_suspect(env):
     submit(phone, nonce, "100000001", samples=still)
     row = status_of(lecturer, sid, "100000001")
     assert row["status"] == "present" and "frozen" in row["notes"]
+
+
+def test_same_coordinates_as_another_student_is_suspect(env):
+    app, _, lecturer, sid = env
+    shared = [{"lat": 32.08531, "lng": 34.78181, "accuracy": 15}] * 2 + [{"lat": 32.08532, "lng": 34.78182, "accuracy": 15}]
+    for student in ("100000001", "100000002"):
+        phone = app.test_client()
+        submit(phone, open_checkin(phone, qr_path(lecturer, sid)), student, samples=shared)
+    assert "same coordinates" in status_of(lecturer, sid, "100000002")["notes"]
+    assert status_of(lecturer, sid, "100000002")["status"] == "suspect"
+
+
+def test_private_window_cheat_is_suspect_via_phone_profile(env):
+    """One phone, a fresh cookie jar (private window), a second student's ID, same profile + network."""
+    app, _, lecturer, sid = env
+    fp = "ab12cd34ef56ab12cd34ef56"
+    first = app.test_client()
+    submit(first, open_checkin(first, qr_path(lecturer, sid)), "100000001", fp=fp)
+    private = app.test_client()  # no cookies: looks like a brand new device
+    submit(private, open_checkin(private, qr_path(lecturer, sid)), "100000002", fp=fp)
+    row = status_of(lecturer, sid, "100000002")
+    assert row["status"] == "suspect"
+    assert "same phone profile" in row["notes"] and "private window" in row["notes"]
+    assert status_of(lecturer, sid, "100000001")["status"] == "present"
+
+
+def test_two_phones_of_same_model_alone_stay_present(env):
+    app, _, lecturer, sid = env
+    fp = "ab12cd34ef56ab12cd34ef56"
+    a, b = app.test_client(), app.test_client()
+    submit(a, open_checkin(a, qr_path(lecturer, sid)), "100000001", fp=fp, headers={"X-Forwarded-For": "1.1.1.1"})
+    submit(b, open_checkin(b, qr_path(lecturer, sid)), "100000002", fp=fp, headers={"X-Forwarded-For": "2.2.2.2"})
+    assert status_of(lecturer, sid, "100000002")["status"] == "present"
+
+
+def test_stale_cached_fix_is_weak_only(env):
+    import time
+    app, _, lecturer, sid = env
+    phone = app.test_client()
+    old = [{**s, "ts": time.time() - 300} for s in near("100000001")]
+    submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000001", samples=old, client_now=time.time())
+    row = status_of(lecturer, sid, "100000001")
+    assert row["status"] == "present" and "old" in row["notes"]
+
+
+def test_student_inside_building_but_away_from_class_is_flagged(env):
+    app, _, lecturer, sid = env
+    for i in range(1, 8):  # seven students sitting together
+        phone = app.test_client()
+        submit(phone, open_checkin(phone, qr_path(lecturer, sid)), f"10000000{i}")
+    away = [{"lat": 32.0853 + 0.0007, "lng": 34.7818, "accuracy": 10}] * 2 + [{"lat": 32.0853 + 0.00071, "lng": 34.7818, "accuracy": 10}]
+    phone = app.test_client()
+    submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000009", samples=away)
+    row = status_of(lecturer, sid, "100000009")
+    assert row["status"] == "suspect" and "outside the class group" in row["notes"] and row["zone"] == "nearby"
+    assert status_of(lecturer, sid, "100000001")["status"] == "present"

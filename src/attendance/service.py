@@ -6,8 +6,10 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from .checks import (CheckContext, DeviceBindingCheck, FrozenLocationCheck, GeofenceCheck, LocationSpoofCheck,
-                     NetworkCheck, TokenFreshnessCheck)
+from .checks import (CheckContext, DeviceBindingCheck, DuplicateCoordinatesCheck, FrozenLocationCheck,
+                     GeofenceCheck, LocationSpoofCheck, NetworkCheck, RapidRepeatCheck,
+                     SharedFingerprintCheck, StaleLocationCheck, TokenFreshnessCheck)
+from .cluster import ClassCluster, build_cluster
 from .config import Config
 from .evaluator import AttendanceEvaluator
 from .counting import CountResult, PeopleCounter
@@ -44,6 +46,10 @@ class AttendanceService:
             GeofenceCheck(config.MAX_LOCATION_ACCURACY_METERS),
             LocationSpoofCheck(config.MIN_PLAUSIBLE_ACCURACY_METERS),
             FrozenLocationCheck(),
+            DuplicateCoordinatesCheck(),
+            StaleLocationCheck(config.STALE_FIX_SECONDS),
+            SharedFingerprintCheck(),
+            RapidRepeatCheck(config.RAPID_REPEAT_SECONDS),
             NetworkCheck(),
         ])
 
@@ -87,7 +93,8 @@ class AttendanceService:
         return self.store.new_ticket(session_id, verdict.age_seconds, ip)
 
     def check_in(self, nonce: str, device_id: str, student_id: Optional[str],
-                 location: LocationReport, ip: str) -> CheckInOutcome:
+                 location: LocationReport, ip: str, fingerprint: str = "",
+                 client_now: Optional[float] = None) -> CheckInOutcome:
         ticket = self.store.consume_ticket(nonce, self.config.TICKET_TTL_SECONDS)
         if ticket is None:
             raise CheckInError("פג הזמן לסימון. סרקו שוב את הקוד שעל המסך.")
@@ -104,7 +111,7 @@ class AttendanceService:
         if student.student_id in session.checkins:
             return CheckInOutcome(student, already_checked_in=True)
 
-        ctx = CheckContext(session, student, device_id, ticket, location, ip)
+        ctx = CheckContext(session, student, device_id, ticket, location, ip, fingerprint, client_now)
         status, results = self.evaluator.evaluate(ctx)
 
         best = location.best()
@@ -113,7 +120,7 @@ class AttendanceService:
         session.checkins[student.student_id] = CheckIn(
             student=student, at=time.time(), device_id=device_id, ip=ip,
             token_age_seconds=ticket.token_age_seconds, location=best,
-            distance_meters=distance, results=results, status=status,
+            distance_meters=distance, results=results, status=status, fingerprint=fingerprint,
         )
         # Register the phone only after evaluation, and only if nobody owns it yet.
         self.registry.bind_if_free(student.student_id, device_id)
@@ -145,22 +152,40 @@ class AttendanceService:
                          self.config.HEADCOUNT_TOLERANCE_PERCENT, session.head_count_confidence,
                          session.head_count_note)
 
+    # ---- class group -------------------------------------------------------------
+    def class_cluster(self, session: LectureSession) -> Optional[ClassCluster]:
+        fixes = [(c.location.lat, c.location.lng, c.location.accuracy)
+                 for c in session.checkins.values() if c.location]
+        return build_cluster(fixes, self.config.CLUSTER_MIN_POINTS, self.config.CLUSTER_MIN_RADIUS_METERS)
+
     # ---- report ------------------------------------------------------------------
     def report_rows(self, session: LectureSession) -> list[dict]:
         rows = []
+        cluster = self.class_cluster(session)
         for student in self.roster.all():
             checkin = session.checkins.get(student.student_id)
             if checkin is None:
                 rows.append({"student_id": student.student_id, "name": student.name,
                              "status": AttendanceStatus.ABSENT.value, "time": None,
-                             "distance_m": None, "token_age_s": None, "notes": ""})
+                             "distance_m": None, "token_age_s": None, "notes": "", "zone": ""})
                 continue
             rows.append({
                 "student_id": student.student_id, "name": student.name,
                 "status": checkin.status.value, "time": checkin.at,
                 "distance_m": round(checkin.distance_meters) if checkin.distance_meters is not None else None,
                 "token_age_s": round(checkin.token_age_seconds, 1),
-                "notes": "; ".join(checkin.failed_reasons()),
+                "notes": "; ".join(checkin.failed_reasons()), "zone": "",
             })
+            loc = checkin.location
+            if cluster and loc and cluster.is_outside(loc.lat, loc.lng, loc.accuracy):
+                # Inside the building radius but away from where the class actually sits.
+                row = rows[-1]
+                where = "nearby" if (checkin.distance_meters is None
+                                     or checkin.distance_meters - loc.accuracy <= session.radius_meters) else "far"
+                row["zone"] = where
+                extra = f"outside the class group ({cluster.distance_to(loc.lat, loc.lng):.0f}m from its centre)"
+                row["notes"] = (row["notes"] + "; " if row["notes"] else "") + extra
+                if row["status"] == AttendanceStatus.PRESENT.value:
+                    row["status"] = AttendanceStatus.SUSPECT.value
         order = {"suspect": 0, "absent": 1, "present": 2}
         return sorted(rows, key=lambda r: (order[r["status"]], r["name"]))

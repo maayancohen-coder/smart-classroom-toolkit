@@ -24,7 +24,7 @@ const KNOWN = {{ (known_name is not none)|tojson }};
 const $ = id => document.getElementById(id);
 
 // Collect a few GPS readings (the server uses them for the geofence and for spoofing checks).
-function collectLocation(maxMs = 6000, wanted = 3) {
+function collectLocation(maxMs = 12000, wanted = 3) {
   return new Promise(resolve => {
     if (!navigator.geolocation) return resolve({ samples: [], denied: true });
     const samples = [];
@@ -39,12 +39,25 @@ function collectLocation(maxMs = 6000, wanted = 3) {
       p => {
         samples.push({ lat: p.coords.latitude, lng: p.coords.longitude,
                        accuracy: p.coords.accuracy, ts: p.timestamp / 1000 });
-        if (samples.length >= wanted) done(false);
+        // Stop early once the fix is good (<=20 m) and we have enough readings; otherwise keep refining.
+        if (samples.length >= wanted && (p.coords.accuracy <= 20 || samples.length >= 8)) done(false);
       },
       () => done(true),
       { enableHighAccuracy: true, maximumAge: 0, timeout: maxMs });
     setTimeout(() => done(samples.length === 0), maxMs);
   });
+}
+
+async function fingerprint() {
+  // Not a secret and not unique to a person: it only lets the server notice the SAME phone under
+  // two names, which a private window cannot hide (the settings below do not change).
+  const parts = [navigator.userAgent, navigator.language, screen.width + "x" + screen.height,
+    screen.colorDepth, devicePixelRatio, navigator.hardwareConcurrency || "", navigator.platform || "",
+    Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.maxTouchPoints || 0].join("|");
+  try {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts));
+    return Array.from(new Uint8Array(buf)).slice(0, 12).map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) { return ""; }
 }
 
 $("go").addEventListener("click", async () => {
@@ -54,10 +67,12 @@ $("go").addEventListener("click", async () => {
   btn.disabled = true;
   msg.textContent = NEEDS_LOCATION ? "מאמת מיקום… (אשרו גישה למיקום)" : "שולח…";
   const loc = NEEDS_LOCATION ? await collectLocation() : { samples: [], denied: false };
+  const fp = await fingerprint();
   try {
     const res = await fetch("/api/checkin", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nonce: NONCE, student_id: sid, samples: loc.samples, denied: loc.denied })
+      body: JSON.stringify({ nonce: NONCE, student_id: sid, samples: loc.samples, denied: loc.denied,
+                             fp, client_now: Date.now() / 1000 })
     });
     const data = await res.json();
     if (data.ok) {

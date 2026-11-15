@@ -72,6 +72,7 @@ class CheckIn:
     distance_meters: Optional[float]
     results: list[CheckResult]
     status: AttendanceStatus
+    fingerprint: str = ""
 
     def failed_reasons(self) -> list[str]:
         return [r.reason for r in self.results if not r.passed]

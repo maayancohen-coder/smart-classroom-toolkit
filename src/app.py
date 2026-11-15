@@ -131,10 +131,17 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             except (KeyError, TypeError, ValueError):
                 continue
         location = LocationReport(samples=samples, denied=bool(data.get("denied")) or not samples)
+        fingerprint = str(data.get("fp") or "")
+        if not (8 <= len(fingerprint) <= 64 and fingerprint.isalnum()):
+            fingerprint = ""
+        try:
+            client_now = float(data["client_now"]) if data.get("client_now") is not None else None
+        except (TypeError, ValueError):
+            client_now = None
         student_id = str(data.get("student_id") or "").strip() or None
         try:
             outcome = service.check_in(str(data.get("nonce") or ""), did, student_id, location,
-                                       request.remote_addr or "")
+                                       request.remote_addr or "", fingerprint, client_now)
         except CheckInError as exc:
             return with_device_cookie(make_response(jsonify(ok=False, error=str(exc)), 400), did, is_new)
         # The student is told only that they were recorded - never their status, so a cheater
