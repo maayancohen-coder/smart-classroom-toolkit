@@ -102,7 +102,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         session = service.store.get(session_id)
         response = make_response(render_template(
             "student_checkin.html", nonce=ticket.nonce, course=session.course,
-            known_name=known.name if known else None, needs_location=session.has_geofence))
+            known_name=known.name if known else None, needs_location=session.has_geofence,
+            device_tag=did[-4:], device_new=is_new))
         response.headers["Cache-Control"] = "no-store"
         return with_device_cookie(response, did, is_new)
 
