@@ -22,6 +22,16 @@ class CountResult:
     note: str = ""
 
 
+def _http_error_detail(exc: "urllib.error.HTTPError") -> str:
+    """Short, key-free description of an HTTP error from the AI service (status + the service's message)."""
+    try:
+        data = json.loads(exc.read().decode("utf-8", "replace"))
+        message = data.get("error", {}).get("message", "") if isinstance(data, dict) else ""
+    except (ValueError, AttributeError):
+        message = ""
+    return f"שגיאה {exc.code}" + (f": {message[:160]}" if message else "")
+
+
 class PeopleCounter(ABC):
     """Port. The service depends on this interface, not on a specific AI vendor (Adapter pattern)."""
 
@@ -91,6 +101,8 @@ class ClaudeVisionCounter(PeopleCounter):
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise CountingError(_http_error_detail(exc)) from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
             raise CountingError("שירות הספירה לא זמין כרגע") from exc
         text = "".join(block.get("text", "") for block in payload.get("content", []) if block.get("type") == "text")
@@ -119,8 +131,10 @@ class GeminiVisionCounter(PeopleCounter):
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise CountingError(_http_error_detail(exc)) from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-            raise CountingError("שירות הספירה לא זמין כרגע (ייתכן שהמכסה החינמית נגמרה)") from exc
+            raise CountingError("שירות הספירה לא זמין כרגע") from exc
         parts = (payload.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
         result = parse_count_reply("".join(part.get("text", "") for part in parts))
         result.method = "ai-vision (gemini)"

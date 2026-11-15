@@ -152,3 +152,17 @@ def test_gemini_unreachable_is_reported_not_crashed(monkeypatch):
     monkeypatch.setattr("urllib.request.urlopen", boom)
     with pytest.raises(CountingError):
         GeminiVisionCounter("KEY", "m").count(b"x", "image/jpeg")
+
+
+def test_http_error_shows_status_and_reason_without_the_key(monkeypatch):
+    import urllib.error
+
+    def refuse(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, 404, "nf", {}, io.BytesIO(
+            json.dumps({"error": {"message": "models/some-model is not found"}}).encode()))
+
+    monkeypatch.setattr("urllib.request.urlopen", refuse)
+    with pytest.raises(CountingError) as caught:
+        GeminiVisionCounter("SECRET-KEY", "some-model").count(b"x", "image/jpeg")
+    assert "404" in str(caught.value) and "not found" in str(caught.value)
+    assert "SECRET-KEY" not in str(caught.value)

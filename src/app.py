@@ -201,6 +201,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
                     return jsonify(ok=False, error="מספר לא סביר"), 400
                 service.record_head_count(session, CountResult(value, "manual"))
         except CountingError as exc:
+            app.logger.warning("people counting failed: %s", exc)
             return jsonify(ok=False, error=str(exc)), 502
         except CheckInError as exc:
             return jsonify(ok=False, error=str(exc)), 400
