@@ -9,6 +9,8 @@ Status: draft v1
 | **Lecturer** | Opens lectures, shows the QR code, uploads a class photo, reads the attendance sheet, runs polls |
 | **Student** | Marks attendance, answers polls, sends comments from their own phone |
 | **People Counter** (system component) | Counts people in a class photo. Not a human actor, but it is an external-facing service the system calls |
+| **Speech-to-Text service** (system component) | Turns a lecture recording into text |
+| **LLM service** (system component) | Corrects the transcript, writes summaries, reviews homework, suggests poll questions |
 
 ## 2. Use case overview
 
@@ -26,6 +28,9 @@ Status: draft v1
 | UC10 | Send a comment or suggestion | Student | Light tool |
 | UC11 | View poll results and comments | Lecturer | Light tool |
 | UC12 | Add a student to the attendance after the lecture is closed | Lecturer | Secondary |
+| UC13 | Get a transcript and summary of a lecture recording | Lecturer | AI tool |
+| UC14 | Get an LLM review of homework | Student, Lecturer | AI tool |
+| UC15 | Compare homework with other students' work | Lecturer, Student | AI tool |
 
 ## 3. User stories
 
@@ -43,6 +48,10 @@ Status: draft v1
 | US10 | As a student, I want to send a comment during or after the lecture, so I can give feedback without interrupting, and choose whether it carries my name or is anonymous. | Short text; the student chooses "anonymous" or "with my name" for each comment; delivered to the lecturer accordingly |
 | US11 | As a student, I do not want my location or photo stored longer than needed. | Class photos deleted after counting; only the count is kept |
 | US12 | As a lecturer, I want to add a student to the attendance after the lecture closed (for example a student with a phone problem), and only I can do that. | Students cannot check in after closing; the lecturer can add a student, and the entry is marked as added manually |
+| US13 | As a lecturer, I want to upload a lecture recording and get an accurate transcript and a summary, so students who missed the lecture can catch up. | Transcript in the lecture language; technical terms from the slides are spelled correctly; summary is shown next to the transcript |
+| US14 | As a student, I want a detailed review of my homework before I submit it, so I can improve it. | Review lists strengths, mistakes and suggestions; shown only to me and, if I choose, to the lecturer |
+| US15 | As a lecturer, I want to compare homework submissions, so I can spot copying and common mistakes. | Comparison covers only submissions of this assignment; students are informed that comparison is done |
+| US16 | As a lecturer, I want to be offered a poll question generated from the current slide, so I can launch a poll quickly. | Suggestion can be edited before it is published |
 
 ## 4. Detailed use cases (core)
 
@@ -133,9 +142,47 @@ Status: draft v1
   3. System marks the student present and records that the entry was **added manually by the lecturer**, with the time.
 - **Notes:** Students themselves can never check in after the lecture is closed. Manual entries do not count toward the head-count comparison logic as suspects, but are shown separately in the sheet.
 
+### UC13: Get a transcript and summary of a lecture recording
+
+- **Actor:** Lecturer
+- **Preconditions:** The lecture has a recording file (for example exported from Zoom or Meet). Optionally, the lecture slides are available.
+- **Main flow:**
+  1. Lecturer uploads the recording and, optionally, the slides.
+  2. System sends the audio to the Speech-to-Text service and receives a raw transcript.
+  3. System sends the raw transcript, together with the slides' text as a glossary, to the LLM service, which corrects technical terms and punctuation.
+  4. System sends the corrected transcript to the LLM service and receives a summary.
+  5. Lecturer reads the transcript and summary and can edit them or download them.
+- **Alternate flows:**
+  - 1a. File too large or unsupported format: the system asks for another file.
+  - 2a. Service unavailable or fails: the job is marked failed, and the lecturer can retry.
+  - 5a. Lecturer shares the summary with the class (optional).
+- **Notes:** The result is a suggestion for a human to check. Accuracy is measured in the tools report.
+
+### UC14: Get an LLM review of homework
+
+- **Actor:** Student or lecturer
+- **Preconditions:** A homework file is available (for example PDF or text).
+- **Main flow:**
+  1. The user uploads the homework and, if available, the assignment text.
+  2. System sends them to the LLM service with the review instructions.
+  3. System returns a structured review: strengths, mistakes, missing parts, suggestions.
+- **Alternate flows:**
+  - 1a. Unsupported or unreadable file: the system asks for another file.
+  - 3a. The review is only visible to the student unless the student shares it.
+
+### UC15: Compare homework with other students' work
+
+- **Actor:** Lecturer (and a student, only against reference material the lecturer provides)
+- **Preconditions:** Several submissions of the same assignment were uploaded by the lecturer, or the lecturer provided reference solutions.
+- **Main flow:**
+  1. Lecturer selects the assignment and starts the comparison.
+  2. System asks the LLM service to compare the submissions and report similarities and common mistakes.
+  3. System shows the report to the lecturer.
+- **Notes:** A student never sees another student's work. Students are told that comparison is performed. This is detailed in the SRS (privacy).
+
 ## 5. Light tools (short form)
 
-- **UC8 Create a quick poll:** lecturer enters a question and options; system publishes it to students in the active session.
+- **UC8 Create a quick poll:** lecturer enters a question and options; system publishes it to students in the active session. The system can also suggest a question generated by the LLM from the current slide (US16).
 - **UC9 Answer a poll:** student sees the open poll on the check-in page or by scanning the QR code, selects one option, one answer per student.
 - **UC10 Send a comment:** student writes a short text during an active session and chooses **anonymous** or **with my name**; it is stored with the session. For an anonymous comment the system does not store or show the student's identity.
 - **UC11 View results and comments:** lecturer sees live poll counts and the list of comments.
@@ -147,3 +194,6 @@ Status: draft v1
 | Can students check in after the lecture is closed? | No. Only the lecturer can add students to a closed lecture (UC12), and the entry is marked as added manually. |
 | What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. To be validated with the class-photo experiment. |
 | Are comments anonymous? | The student chooses for each comment: anonymous or with their name. |
+| Where does the lecture recording come from? | The lecturer uploads the file; there is no Zoom or Meet integration. |
+| How is the transcript kept accurate? | A speech-to-text model, then an LLM corrects terms using the slides as a glossary. Accuracy is measured on a real sample in the tools report. |
+| Whose homework can be compared? | The lecturer can compare submissions of one assignment. A student can only compare against reference material provided by the lecturer. |
