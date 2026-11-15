@@ -139,7 +139,7 @@ async function shrink(file, maxSide = 1600) {
   return new Promise(res => canvas.toBlob(res, "image/jpeg", 0.85));
 }
 async function sendHeadcount(body) {
-  $("hcMsg").textContent = "סופר…";
+  $("hcMsg").textContent = "סופר… זה יכול לקחת עד כשתי דקות";
   const res = await fetch(`/api/session/${SID}/headcount`, { method: "POST", body });
   const d = await res.json().catch(() => ({}));
   $("hcMsg").textContent = res.ok ? "" : (d.error || "שגיאה");

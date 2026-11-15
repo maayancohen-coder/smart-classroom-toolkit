@@ -24,9 +24,9 @@ ONE_YEAR = 60 * 60 * 24 * 365
 def build_counter(config):
     """Pick the people counter from the configuration; None means manual entry only."""
     if config.GEMINI_API_KEY:
-        return GeminiVisionCounter(config.GEMINI_API_KEY, config.GEMINI_MODEL)
+        return GeminiVisionCounter(config.GEMINI_API_KEY, config.GEMINI_MODEL, config.COUNTER_TIMEOUT_SECONDS)
     if config.ANTHROPIC_API_KEY:
-        return ClaudeVisionCounter(config.ANTHROPIC_API_KEY, config.COUNTER_MODEL)
+        return ClaudeVisionCounter(config.ANTHROPIC_API_KEY, config.COUNTER_MODEL, config.COUNTER_TIMEOUT_SECONDS)
     return None
 
 
