@@ -10,7 +10,9 @@ from .checks import (CheckContext, DeviceBindingCheck, FrozenLocationCheck, Geof
                      NetworkCheck, TokenFreshnessCheck)
 from .config import Config
 from .evaluator import AttendanceEvaluator
+from .counting import CountResult, PeopleCounter
 from .geo import haversine_meters, ip_in_networks, network_of
+from .headcount import HeadCountSummary, summarize
 from .models import (AttendanceStatus, CheckIn, CheckInTicket, LectureSession, LocationReport,
                      RejectedAttempt, Student)
 from .repository import DeviceRegistry, Roster, SessionStore
@@ -29,12 +31,13 @@ class CheckInOutcome:
 
 class AttendanceService:
     def __init__(self, config: type[Config], roster: Roster, registry: DeviceRegistry,
-                 store: SessionStore, tokens: TokenService):
+                 store: SessionStore, tokens: TokenService, counter: Optional[PeopleCounter] = None):
         self.config = config
         self.roster = roster
         self.registry = registry
         self.store = store
         self.tokens = tokens
+        self.counter = counter
         self.evaluator = AttendanceEvaluator([
             TokenFreshnessCheck(config.MAX_TOKEN_AGE_SECONDS),
             DeviceBindingCheck(registry),
@@ -119,6 +122,28 @@ class AttendanceService:
     def student_for_device(self, device_id: str) -> Optional[Student]:
         sid = self.registry.student_for_device(device_id)
         return self.roster.get(sid) if sid else None
+
+    # ---- head count --------------------------------------------------------------
+    def count_photo(self, session: LectureSession, image: bytes, mime: str) -> CountResult:
+        """Count people in the photo. The image bytes are not stored anywhere; only the number is kept."""
+        if self.counter is None:
+            raise CheckInError("לא הוגדר שירות ספירה. אפשר להזין את המספר ידנית.")
+        result = self.counter.count(image, mime)
+        self.record_head_count(session, result)
+        return result
+
+    def record_head_count(self, session: LectureSession, result: CountResult) -> None:
+        session.head_count = result.count
+        session.head_count_method = result.method
+        session.head_count_confidence = result.confidence
+        session.head_count_note = result.note
+
+    def head_count_summary(self, session: LectureSession) -> Optional[HeadCountSummary]:
+        if session.head_count is None:
+            return None
+        return summarize(list(session.checkins.values()), session.head_count, session.head_count_method,
+                         self.config.HEADCOUNT_TOLERANCE_PERCENT, session.head_count_confidence,
+                         session.head_count_note)
 
     # ---- report ------------------------------------------------------------------
     def report_rows(self, session: LectureSession) -> list[dict]:

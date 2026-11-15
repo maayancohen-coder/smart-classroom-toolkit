@@ -97,6 +97,10 @@ class LectureSession:
     closed: bool = False
     checkins: dict[str, CheckIn] = field(default_factory=dict)  # student_id -> CheckIn
     rejected: list[RejectedAttempt] = field(default_factory=list)
+    head_count: Optional[int] = None  # number of people counted in the class photo (the photo is never kept)
+    head_count_method: str = ""
+    head_count_confidence: str = ""
+    head_count_note: str = ""
 
     @property
     def has_geofence(self) -> bool:

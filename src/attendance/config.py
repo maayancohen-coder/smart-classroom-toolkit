@@ -39,3 +39,10 @@ class Config:
 
     # Protects the lecturer dashboard and API. Printed at startup if not set.
     LECTURER_KEY = os.environ.get("LECTURER_KEY") or secrets.token_urlsafe(8)
+
+    # People counting from the class photo (head-count gap).
+    HEADCOUNT_TOLERANCE_PERCENT = float(os.environ.get("HEADCOUNT_TOLERANCE_PERCENT", 10))
+    MAX_PHOTO_BYTES = _env_int("MAX_PHOTO_BYTES", 8_000_000)
+    # Vision model used for counting. Without a key the lecturer can still type the count by hand.
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+    COUNTER_MODEL = os.environ.get("COUNTER_MODEL", "claude-sonnet-5-5")

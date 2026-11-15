@@ -9,6 +9,7 @@ from flask import (Flask, Response, abort, jsonify, make_response, redirect, ren
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from attendance.config import Config
+from attendance.counting import ClaudeVisionCounter, CountingError, CountResult
 from attendance.models import LocationReport, LocationSample
 from attendance.report import to_csv, to_xlsx
 from attendance.repository import DeviceRegistry, Roster, SessionStore
@@ -32,6 +33,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         DeviceRegistry(),
         SessionStore(),
         TokenService(config.TOKEN_PERIOD_SECONDS, config.TOKEN_GRACE_PERIODS),
+        counter=(ClaudeVisionCounter(config.ANTHROPIC_API_KEY, config.COUNTER_MODEL)
+                 if config.ANTHROPIC_API_KEY else None),
     )
     app.extensions["attendance_service"] = service
 
@@ -162,8 +165,39 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         counts = {"present": 0, "suspect": 0, "absent": 0}
         for row in rows:
             counts[row["status"]] += 1
+        summary = service.head_count_summary(session)
         return jsonify(rows=rows, counts=counts, closed=session.closed,
-                       rejected_scans=len(session.rejected))
+                       rejected_scans=len(session.rejected),
+                       headcount=summary.as_dict() if summary else None,
+                       can_count_photo=service.counter is not None)
+
+    @app.post("/api/session/<session_id>/headcount")
+    def api_headcount(session_id):
+        """Count people from an uploaded photo, or take a number typed by the lecturer."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        photo = request.files.get("photo")
+        try:
+            if photo is not None:
+                image = photo.read(config.MAX_PHOTO_BYTES + 1)
+                if not image or len(image) > config.MAX_PHOTO_BYTES:
+                    return jsonify(ok=False, error="התמונה ריקה או גדולה מדי"), 400
+                mime = photo.mimetype if photo.mimetype in ("image/jpeg", "image/png", "image/webp") else "image/jpeg"
+                service.count_photo(session, image, mime)
+            else:
+                try:
+                    value = int(request.form.get("count", (request.get_json(silent=True) or {}).get("count")))
+                except (TypeError, ValueError):
+                    return jsonify(ok=False, error="יש להעלות תמונה או להזין מספר"), 400
+                if not 0 <= value <= 2000:
+                    return jsonify(ok=False, error="מספר לא סביר"), 400
+                service.record_head_count(session, CountResult(value, "manual"))
+        except CountingError as exc:
+            return jsonify(ok=False, error=str(exc)), 502
+        except CheckInError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        summary = service.head_count_summary(session)
+        return jsonify(ok=True, headcount=summary.as_dict())
 
     @app.post("/api/session/<session_id>/close")
     def api_close(session_id):
@@ -184,11 +218,13 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         session = get_session_or_404(session_id)
         rows = service.report_rows(session)
+        head = service.head_count_summary(session)
+        summary = head.as_dict() if head else None
         stamp = time.strftime("%Y-%m-%d_%H%M", time.localtime(session.started_at))
         if fmt == "xlsx":
-            body, mime = to_xlsx(rows, session.course), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            body, mime = to_xlsx(rows, session.course, summary), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         elif fmt == "csv":
-            body, mime = to_csv(rows), "text/csv; charset=utf-8"
+            body, mime = to_csv(rows, summary), "text/csv; charset=utf-8"
         else:
             abort(404)
         return Response(body, mimetype=mime,
