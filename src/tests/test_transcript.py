@@ -72,3 +72,63 @@ def test_only_the_lecturer_can_use_the_transcript_routes(env):
 def test_download_without_transcript_is_404(env):
     _, _, lecturer, sid = env
     assert lecturer.get(f"/api/session/{sid}/transcript.txt").status_code == 404
+
+
+# ---- only the lecturer's voice ------------------------------------------------------------
+from attendance.transcript import Segment, assemble_lecturer_transcript  # noqa: E402
+
+LOUD, QUIET, LIMIT = 0.20, 0.03, 0.10
+
+
+def seg(text, level, t0, t1):
+    return Segment(text, level, t0, t1)
+
+
+def test_quiet_voices_that_are_not_questions_are_dropped():
+    result = assemble_lecturer_transcript(
+        [seg("היום נדבר על תבניות", LOUD, 0, 3), seg("מישהו הביא קפה", QUIET, 3, 5), seg("נתחיל", LOUD, 5, 7)],
+        LIMIT, GLOSSARY)
+    assert result.text == "היום נדבר על תבניות נתחיל" and result.questions == 0
+    assert result.dropped == [{"text": "מישהו הביא קפה", "reason": "quiet voice, not a question"}]
+
+
+def test_related_student_question_with_an_answer_is_kept():
+    result = assemble_lecturer_transcript(
+        [seg("תבנית Strategy מחליפה אלגוריתם", LOUD, 0, 4),
+         seg("מה ההבדל בין Strategy לבין Adapter", QUIET, 4, 8),
+         seg("ההבדל הוא שהאדפטר מתאים ממשק", LOUD, 8, 12)],
+        LIMIT, GLOSSARY)
+    assert "[שאלה מהכיתה] מה ההבדל בין Strategy לבין Adapter" in result.text and result.questions == 1
+
+
+def test_question_without_an_answer_is_dropped():
+    result = assemble_lecturer_transcript(
+        [seg("תבנית Strategy", LOUD, 0, 3), seg("מה זה Adapter", QUIET, 3, 6), seg("נמשיך הלאה", LOUD, 40, 43)],
+        LIMIT, GLOSSARY)
+    assert result.questions == 0 and result.dropped[0]["reason"] == "question that the lecturer did not answer"
+
+
+def test_unrelated_question_is_dropped():
+    result = assemble_lecturer_transcript(
+        [seg("תבנית Strategy", LOUD, 0, 3), seg("איפה החנייה של הפקולטה", QUIET, 3, 6), seg("בואו נמשיך לנושא", LOUD, 6, 9)],
+        LIMIT, GLOSSARY)
+    assert result.questions == 0 and result.dropped[0]["reason"].startswith("question not related")
+
+
+def test_spoken_letters_can_be_a_or_i():
+    assert fix("חשוב להכיר איי פי איי", GLOSSARY + ["API"]) == "חשוב להכיר API"
+
+
+def test_route_uses_segments_threshold_and_default_terms(env):
+    _, _, lecturer, sid = env
+    body = {"threshold": LIMIT, "glossary": "", "segments": [
+        {"text": "תבנית סטרטגי", "level": LOUD, "t0": 0, "t1": 3},
+        {"text": "שיחה בצד", "level": QUIET, "t0": 3, "t1": 5}]}
+    data = lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()
+    assert data["corrected"] == "תבנית Strategy" and len(data["dropped"]) == 1
+    body["defaults"] = False
+    assert lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()["corrected"] == "תבנית סטרטגי"
+
+
+def test_a_word_before_the_term_is_not_swallowed():
+    assert fix("ההבדל הוא שהאדפטר מתאים ממשק") == "ההבדל הוא ש-Adapter מתאים ממשק"

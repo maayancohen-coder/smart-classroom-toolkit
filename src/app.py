@@ -15,7 +15,8 @@ from attendance.report import to_csv, to_xlsx
 from attendance.repository import DeviceRegistry, Roster, SessionStore
 from attendance.service import AttendanceService, CheckInError
 from attendance.tokens import TokenService
-from attendance.transcript import correct_transcript, parse_glossary
+from attendance.terms import DEFAULT_TERMS
+from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
 
 DEVICE_COOKIE = "did"
 LECTURER_COOKIE = "lk"
@@ -229,12 +230,30 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         session = get_session_or_404(session_id)
         data = request.get_json(silent=True) or {}
-        raw = str(data.get("raw") or "")[:200_000]
         glossary_text = str(data.get("glossary") or "")[:5_000]
-        result = correct_transcript(raw, parse_glossary(glossary_text))
+        terms = parse_glossary(glossary_text)
+        if data.get("defaults", True):
+            terms = terms + [t for t in DEFAULT_TERMS if t.lower() not in {x.lower() for x in terms}]
+        raw = str(data.get("raw") or "")[:200_000]
+        dropped, questions = [], 0
+        segments = []
+        for item in (data.get("segments") or [])[:5000]:
+            try:
+                segments.append(Segment(str(item["text"])[:2000], float(item["level"]), float(item["t0"]), float(item["t1"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if segments:
+            try:
+                threshold = float(data.get("threshold"))
+            except (TypeError, ValueError):
+                threshold = 0.0
+            assembled = assemble_lecturer_transcript(segments, threshold, terms)
+            raw, dropped, questions = assembled.text, assembled.dropped, assembled.questions
+        result = correct_transcript(raw, terms)
         session.transcript_raw, session.transcript_corrected = raw, result.text
         session.transcript_glossary = glossary_text
-        return jsonify(ok=True, corrected=result.text, missing=result.missing,
+        return jsonify(ok=True, raw=raw, corrected=result.text, questions=questions, dropped=dropped,
+                       missing=[m for m in result.missing if m.lower() in glossary_text.lower()],
                        fixes=[{"heard": f.heard, "term": f.term} for f in result.fixes])
 
     @app.get("/api/session/<session_id>/transcript.txt")

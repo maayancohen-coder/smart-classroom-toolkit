@@ -2,41 +2,59 @@
 {% block title %}תמלול · {{ session.course }}{% endblock %}
 {% block head %}
 <style>
-  .page { max-width: 820px; margin: 0 auto; padding: 20px 16px; }
-  textarea { width: 100%; min-height: 150px; font: inherit; font-size: 1rem; padding: 12px; border-radius: 10px;
+  .page { max-width: 860px; margin: 0 auto; padding: 20px 16px; }
+  textarea { width: 100%; min-height: 130px; font: inherit; font-size: 1rem; padding: 12px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--bg); color: var(--text); }
   textarea.small { min-height: 70px; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
   .rec { background: #b42318; }
   .note { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; margin: 12px 0; font-size: .92rem; }
   .fix { display: inline-block; margin: 3px 4px; padding: 2px 10px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: .9rem; }
-  .miss { background: var(--warn-bg); color: var(--warn); }
+  .miss, .drop { background: var(--warn-bg); color: var(--warn); }
   select { font-size: 1rem; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .meter { position: relative; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); }
+  .meter > i { position: absolute; top: 0; bottom: 0; width: 3px; background: #b42318; }
+  #live { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-height: 60px; max-height: 220px; overflow: auto; }
+  #live .cls { color: var(--muted); font-style: italic; }
+  #live .cls::before { content: "קול שקט: "; font-size: .8rem; }
+  details { margin-top: 12px; }
 </style>
 {% endblock %}
 {% block body %}
 <div class="page"><div class="card">
   <h1>תמלול הרצאה · {{ session.course }}</h1>
-  <p class="muted">מקליטים עם המיקרופון של הדפדפן, והמערכת מתקנת את המונחים הטכניים לפי רשימה שאתם נותנים.</p>
-  <div class="note" id="support">ההכתבה פועלת ב-Chrome. הקול מעובד בשירות זיהוי הדיבור של הדפדפן (ב-Chrome: Google), והמערכת עצמה לא שומרת אודיו, רק את הטקסט. יש להודיע לכיתה לפני שמקליטים.</div>
+  <p class="muted">מקליטים עם המיקרופון של הדפדפן. המערכת שומרת רק את קול המרצה (הקול החזק במיקרופון), ושאלות רלוונטיות מהכיתה שהמרצה ענה עליהן. מונחים באנגלית מתוקנים לפי רשימה.</p>
+  <div class="note">ההכתבה פועלת ב-Chrome. הקול מעובד בשירות זיהוי הדיבור של הדפדפן (ב-Chrome: Google), והמערכת עצמה לא שומרת אודיו, רק טקסט. יש להודיע לכיתה לפני שמקליטים. ההפרדה בין המרצה לכיתה מבוססת על עוצמת הקול במיקרופון, לא על זיהוי דובר, ולכן המרצה צריך להיות הקרוב ביותר למיקרופון.</div>
 
   <div class="row">
     <select id="lang"><option value="he-IL">עברית</option><option value="en-US">English</option></select>
     <button id="rec" type="button">התחל הקלטה</button>
+    <button id="cal" type="button" class="secondary">כיול קול המרצה (5 שניות)</button>
     <span class="muted" id="state"></span>
   </div>
+  <label for="thr" style="margin-bottom:0">סף עוצמה: מה שמתחת לקו האדום נחשב לכיתה</label>
+  <input id="thr" type="range" min="0.005" max="0.3" step="0.005" value="0.05" style="padding:0">
+  <div class="meter"><div id="lvl"></div><i id="mark"></i></div>
 
-  <label for="raw">מה שהמערכת שמעה (אפשר גם להדביק טקסט ולערוך)</label>
-  <textarea id="raw" placeholder="הטקסט יופיע כאן בזמן ההקלטה"></textarea>
+  <label>מה שנשמע עכשיו</label>
+  <div id="live"></div>
+
+  <details>
+    <summary>או הדביקו טקסט ידנית (במקום הקלטה)</summary>
+    <textarea id="raw" placeholder="טקסט להדבקה"></textarea>
+  </details>
 
   <label for="glossary">מונחים מהשקופיות (אחד בשורה, או מופרדים בפסיק)</label>
   <textarea id="glossary" class="small" placeholder="Strategy, Adapter, Interface, Unit Test"></textarea>
-  <div class="row"><button id="fix" type="button">תקן לפי המונחים</button></div>
+  <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="defaults" checked style="width:auto"> כלול גם מונחים נפוצים בהנדסת תוכנה</label>
+  <div class="row"><button id="fix" type="button">הפק תמלול</button></div>
 
   <div id="result" hidden>
-    <label>הטקסט המתוקן</label>
+    <label>התמלול</label>
     <textarea id="corrected" readonly></textarea>
     <p id="fixes"></p>
+    <p id="dropped"></p>
     <div class="row">
       <a class="btn secondary" id="dl" href="/api/session/{{ session.session_id }}/transcript.txt">הורדה כקובץ</a>
       <a class="btn secondary" href="/lecturer/{{ session.session_id }}">חזרה לשיעור</a>
@@ -48,44 +66,123 @@
 const SID = {{ session.session_id|tojson }};
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const now = () => performance.now() / 1000;
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, recording = false, finalText = "";
+let rec = null, recording = false, lastFinal = now(), interim = "";
+let segments = [];            // {text, level, t0, t1}
+let samples = [];             // microphone level over time: {t, v}
+let audioCtx = null, analyser = null, buf = null, meterTimer = null, calibrating = null;
 
 if (!SR) { $("rec").disabled = true; $("state").textContent = "הדפדפן לא תומך בהכתבה. אפשר להדביק טקסט ידנית."; }
 
-function start() {
+const threshold = () => parseFloat($("thr").value);
+function updateMark() { $("mark").style.right = Math.min(100, threshold() / 0.3 * 100) + "%"; }
+function percentile(values, p) {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+}
+function levelBetween(t0, t1) {
+  return percentile(samples.filter(x => x.t >= t0 && x.t <= t1).map(x => x.v), 0.75);
+}
+function renderLive() {
+  const lim = threshold();
+  $("live").innerHTML = segments.map(s => `<span class="${s.level >= lim ? "" : "cls"}">${esc(s.text)}</span>`).join(" ")
+    + (interim ? ` <span class="muted">${esc(interim)}</span>` : "");
+  $("live").scrollTop = $("live").scrollHeight;
+}
+function addSegment(text, level, t0, t1) {            // also used by the tests
+  segments.push({ text, level, t0, t1 });
+  renderLive();
+}
+window.__addSegment = addSegment;
+
+async function ensureMic() {
+  if (analyser) return true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    buf = new Float32Array(analyser.fftSize);
+    meterTimer = setInterval(() => {
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0; for (const x of buf) sum += x * x;
+      const rms = Math.sqrt(sum / buf.length);
+      const t = now();
+      samples.push({ t, v: rms });
+      if (samples.length > 60000) samples.splice(0, 20000);
+      $("lvl").style.width = Math.min(100, rms / 0.3 * 100) + "%";
+      if (calibrating) calibrating.push(rms);
+    }, 100);
+    return true;
+  } catch (e) {
+    $("state").textContent = "אין גישה למיקרופון: " + (e.name || e);
+    return false;
+  }
+}
+
+function startRecognition() {
   rec = new SR();
   rec.lang = $("lang").value; rec.continuous = true; rec.interimResults = true;
   rec.onresult = e => {
-    let interim = "";
+    interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += (finalText ? " " : "") + t.trim(); else interim += t;
+      const text = e.results[i][0].transcript.trim();
+      if (e.results[i].isFinal) {
+        if (text) { const t1 = now(); addSegment(text, levelBetween(lastFinal, t1), lastFinal, t1); lastFinal = t1; }
+      } else interim += text + " ";
     }
-    $("raw").value = finalText + (interim ? " " + interim : "");
+    renderLive();
   };
   rec.onerror = e => { $("state").textContent = e.error === "not-allowed" ? "אין הרשאה למיקרופון" : "שגיאת הכתבה: " + e.error; };
   rec.onend = () => { if (recording) { try { rec.start(); } catch (_) {} } };   // Chrome stops after silence
-  finalText = $("raw").value.trim();
+  lastFinal = now();
   rec.start();
 }
-$("rec").addEventListener("click", () => {
-  recording = !recording;
+$("rec").addEventListener("click", async () => {
+  if (!recording) {
+    if (!(await ensureMic())) return;
+    recording = true; startRecognition();
+  } else {
+    recording = false; try { rec.stop(); } catch (_) {}
+  }
   $("rec").textContent = recording ? "עצור הקלטה" : "התחל הקלטה";
   $("rec").classList.toggle("rec", recording);
   $("state").textContent = recording ? "מקליט…" : "";
-  if (recording) start(); else { try { rec.stop(); } catch (_) {} }
 });
+$("cal").addEventListener("click", async () => {
+  if (!(await ensureMic())) return;
+  $("state").textContent = "המרצה מדבר עכשיו כרגיל…";
+  calibrating = [];
+  await new Promise(r => setTimeout(r, 5000));
+  const got = calibrating; calibrating = null;
+  const floor = percentile(got, 0.2);
+  const voiced = got.filter(v => v > Math.max(0.004, floor * 2));
+  if (voiced.length < 10) { $("state").textContent = "לא נשמע דיבור. נסו שוב קרוב יותר למיקרופון."; return; }
+  const level = percentile(voiced, 0.5);
+  $("thr").value = Math.min(0.3, Math.max(0.005, level * 0.5)).toFixed(3);
+  updateMark(); renderLive();
+  $("state").textContent = "הסף עודכן לפי קול המרצה";
+});
+$("thr").addEventListener("input", () => { updateMark(); renderLive(); });
+updateMark();
+
 $("fix").addEventListener("click", async () => {
   const res = await fetch(`/api/session/${SID}/transcript`, { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ raw: $("raw").value, glossary: $("glossary").value }) });
-  if (!res.ok) { $("state").textContent = "שגיאה בתיקון"; return; }
+    body: JSON.stringify({ raw: $("raw").value, segments, threshold: threshold(),
+                           glossary: $("glossary").value, defaults: $("defaults").checked }) });
+  if (!res.ok) { $("state").textContent = "שגיאה בהפקת התמלול"; return; }
   const d = await res.json();
   $("result").hidden = false;
   $("corrected").value = d.corrected;
-  $("fixes").innerHTML = (d.fixes.length ? "תוקנו " + d.fixes.length + ": " : "לא נמצא מה לתקן. ")
+  $("fixes").innerHTML = (d.fixes.length ? "מונחים באנגלית שתוקנו: " + d.fixes.length + " " : "לא נמצאו מונחים לתקן. ")
     + d.fixes.map(f => `<span class="fix">${esc(f.heard)} ← ${esc(f.term)}</span>`).join("")
-    + (d.missing.length ? "<br>מונחים שלא הופיעו בטקסט: " + d.missing.map(m => `<span class="fix miss">${esc(m)}</span>`).join("") : "");
+    + (d.questions ? `<br>שאלות מהכיתה שנכללו: ${d.questions}` : "")
+    + (d.missing.length ? "<br>מונחים מהרשימה שלא הופיעו: " + d.missing.map(m => `<span class="fix miss">${esc(m)}</span>`).join("") : "");
+  $("dropped").innerHTML = d.dropped.length
+    ? "הוסרו (לא קול המרצה): " + d.dropped.map(x => `<span class="fix drop" title="${esc(x.reason)}">${esc(x.text)}</span>`).join("")
+    : "";
 });
 </script>
 {% endblock %}
