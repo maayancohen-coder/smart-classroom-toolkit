@@ -35,6 +35,7 @@ classDiagram
     class CheckIn {
         +datetime at
         +String deviceId
+        +String fingerprint
         +float tokenAgeSeconds
         +float distanceMeters
         +bool addedManually
@@ -83,7 +84,7 @@ classDiagram
         +closeSession(session)
         +currentQr(session) QrCode
         +scan(sessionId, slot, signature) CheckInTicket
-        +checkIn(nonce, deviceId, studentId, location) CheckIn
+        +checkIn(nonce, deviceId, studentId, location, pin, fingerprint) CheckIn
         +addManually(session, studentId) CheckIn
         +report(session) List~ReportRow~
     }
@@ -109,6 +110,16 @@ classDiagram
         +bindIfFree(studentId, deviceId) bool
         +reset(studentId)
     }
+    class PinStore {
+        +checkOrSet(studentId, pin) Verdict
+        +reset(studentId)
+    }
+    class ClassCluster {
+        +float centerLat
+        +float centerLng
+        +float radiusMeters
+        +isOutside(lat, lng, accuracy) bool
+    }
     class AttendanceEvaluator {
         +evaluate(context) Evaluation
     }
@@ -119,6 +130,8 @@ classDiagram
         +CheckInTicket ticket
         +LocationReport location
         +String ip
+        +String fingerprint
+        +bool pinVerified
     }
     class AttendanceCheck {
         <<abstract>>
@@ -130,12 +143,22 @@ classDiagram
     class DeviceBindingCheck
     class GeofenceCheck
     class LocationSpoofCheck
+    class FrozenLocationCheck
+    class DuplicateCoordinatesCheck
+    class StaleLocationCheck
+    class SharedFingerprintCheck
+    class RapidRepeatCheck
     class NetworkCheck
 
     AttendanceCheck <|-- TokenFreshnessCheck
     AttendanceCheck <|-- DeviceBindingCheck
     AttendanceCheck <|-- GeofenceCheck
     AttendanceCheck <|-- LocationSpoofCheck
+    AttendanceCheck <|-- FrozenLocationCheck
+    AttendanceCheck <|-- DuplicateCoordinatesCheck
+    AttendanceCheck <|-- StaleLocationCheck
+    AttendanceCheck <|-- SharedFingerprintCheck
+    AttendanceCheck <|-- RapidRepeatCheck
     AttendanceCheck <|-- NetworkCheck
 
     DeviceBindingCheck --> DeviceRegistry
@@ -147,11 +170,15 @@ classDiagram
     AttendanceService --> TicketStore
     AttendanceService --> AttendanceEvaluator
     AttendanceService --> DeviceRegistry
+    AttendanceService --> PinStore
+    AttendanceService ..> ClassCluster
     AttendanceService --> Roster
     TicketStore "1" o-- "*" CheckInTicket
 ```
 
-How the evaluator decides: it runs every check. If at least one **strong** check failed, or at least two **weak** checks failed, the status is `SUSPECT`. Otherwise it is `PRESENT`. Strong checks: device binding, geofence, location spoofing. Weak checks: token freshness, campus network.
+How the evaluator decides: it runs every check. If at least one **strong** check failed, or at least two **weak** checks failed, the status is `SUSPECT`. Otherwise it is `PRESENT`. Strong checks: device binding, geofence, location plausibility, same coordinates as another student. Weak checks: token freshness, frozen location, stale location reading, same phone profile, repeated check-in from the same phone profile and network, campus network.
+
+Two things happen outside the evaluator. Before it runs, `AttendanceService` refuses a check-in that has no location (when the class has a location) and refuses a wrong PIN, using `PinStore`; a correct PIN also tells `DeviceBindingCheck` that a new phone is not a cheat signal. When the report is built, `ClassCluster` (the centre and spread of the check-ins of the class) marks a check-in suspect if its location is clearly outside the group, even inside the lecturer's radius.
 
 ### 1.3 Attendance: head-count gap and export
 
@@ -366,6 +393,7 @@ sequenceDiagram
     participant EV as AttendanceEvaluator
     participant CH as AttendanceCheck
     participant DR as DeviceRegistry
+    participant PS as PinStore
 
     Student->>SC: Scan QR code
     SC->>API: GET /c/session/slot/signature
@@ -382,11 +410,24 @@ sequenceDiagram
         AS-->>API: ticket
         API-->>SC: check-in page
     end
-    Student->>SC: Enter student ID (first time) and allow location
-    SC->>API: POST /api/checkin (ticket, student ID, location)
-    API->>AS: checkIn(ticket, deviceId, studentId, location)
+    Student->>SC: Enter student ID and personal PIN, allow location
+    SC->>API: POST /api/checkin (ticket, student ID, PIN, location, phone profile)
+    API->>AS: checkIn(ticket, deviceId, studentId, location, pin, fingerprint)
     AS->>TK: consume(ticket)
     TK-->>AS: ticket (single use)
+    alt no location although the class has one
+        AS-->>API: refused, ticket stays valid
+        API-->>SC: please allow location
+    else location given
+        AS->>PS: checkOrSet(studentId, pin)
+        alt wrong PIN or locked
+            PS-->>AS: wrong / locked
+            AS-->>API: refused, ticket stays valid
+            API-->>SC: wrong code
+        else first PIN or correct PIN
+            PS-->>AS: set / ok
+        end
+    end
     AS->>EV: evaluate(context)
     loop each check
         EV->>CH: run(context)
@@ -497,10 +538,12 @@ sequenceDiagram
 | Requirement | Class |
 |---|---|
 | FR-5 to FR-7 (rotating QR) | `TokenService` |
-| FR-8 to FR-11 (check-in) | `AttendanceService`, `TicketStore`, `Roster` |
+| FR-8 to FR-11a (check-in, location required) | `AttendanceService`, `TicketStore`, `Roster` |
+| FR-9a, FR-9b (personal PIN) | `PinStore`, `AttendanceService` |
 | FR-12, FR-13 (checks and decision) | `AttendanceCheck` subclasses, `AttendanceEvaluator` |
+| FR-12a (outside the class group) | `ClassCluster`, `AttendanceService.report` |
 | FR-17, FR-18 (device binding) | `DeviceRegistry`, `DeviceBindingCheck` |
-| FR-20 to FR-24 (head count) | `PeopleCounter`, `HeadCountComparer`, `GapReport` |
+| FR-20 to FR-24a (head count; photo counting is designed, not in the demo) | `PeopleCounter`, `HeadCountComparer`, `GapReport` |
 | FR-25 to FR-28 (sheet) | `ReportExporter`, `AttendanceService.addManually` |
 | FR-29 to FR-33 (polls, comments) | `PollService`, `CommentService`, `Comment` |
 | FR-34 to FR-39 (transcript) | `MediaService`, `JobRunner`, `SpeechToText`, `LLMClient` |

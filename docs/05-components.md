@@ -106,16 +106,18 @@ This is the core of the system, so it is split into smaller parts. These parts b
 |---|---|
 | **Token service** | Creates a signed token for a time slot and verifies a token within the allowed window |
 | **Ticket store** | Creates single-use check-in tickets and expires them |
-| **Attendance checks** | One independent check per signal: token freshness, device binding, classroom location, location plausibility, campus network. All implement one interface. |
+| **Attendance checks** | One independent check per signal: token freshness, device binding, classroom location, location plausibility, frozen location, same coordinates as another student, stale location reading, same phone profile, repeated check-in from one phone profile and network, campus network. All implement one interface. |
 | **Evaluator** | Combines the results of the checks into present or suspect |
 | **Device registry** | Binds a phone to one student |
+| **PIN store** | Keeps a salted hash of each student's personal PIN, accepts the first PIN a student enters, checks later ones, and locks a student after 5 wrong tries (FR-9a, FR-9b) |
+| **Class cluster** | Computes the centre and spread of the check-ins' locations and tells whether a check-in is clearly outside the class group (FR-12a) |
 | **Head-count comparer** | Compares the number of check-ins with the counted people and finds the most suspect check-ins when the gap exceeds the tolerance |
 
 ## 4. Main interfaces between components
 
 | Between | Interface (summary) |
 |---|---|
-| Student client and API | `GET /c/{session}/{slot}/{signature}` opens the check-in page; `POST /api/checkin` sends the ticket, student ID and location |
+| Student client and API | `GET /c/{session}/{slot}/{signature}` opens the check-in page; `POST /api/checkin` sends the ticket, student ID, personal PIN, location readings and a phone profile hash |
 | Lecturer client and API | Open and close a session; get the current QR; get the attendance report; upload a photo; export; polls, comments, recordings, homework |
 | Attendance service and people counter | `count(image) -> number of people` |
 | Background job runner and ASR | `transcribe(audio, language) -> transcript` |
