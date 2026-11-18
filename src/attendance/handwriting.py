@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import urllib.error
 import urllib.request
 
@@ -30,15 +31,24 @@ class Transcriber:
         raise NotImplementedError
 
 
-def _call(request: urllib.request.Request, timeout: float) -> dict:
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:300]
-        raise HandwritingError(f"שירות הקריאה החזיר שגיאה {exc.code}: {detail}") from exc
-    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise HandwritingError("לא הצלחתי להגיע לשירות הקריאה (זמן ההמתנה עבר או שאין חיבור)") from exc
+RETRY_CODES = (429, 500, 502, 503, 504)
+RETRY_WAITS = (4, 10, 20)       # seconds; a busy model usually answers on the second or third try
+
+
+def _call(request: urllib.request.Request, timeout: float, waits: tuple = RETRY_WAITS) -> dict:
+    for attempt in range(len(waits) + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code in RETRY_CODES and attempt < len(waits):
+                time.sleep(waits[attempt])
+                continue
+            detail = exc.read().decode("utf-8", errors="replace")[:300]
+            raise HandwritingError(f"שירות הקריאה החזיר שגיאה {exc.code}: {detail}") from exc
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            raise HandwritingError("לא הצלחתי להגיע לשירות הקריאה (זמן ההמתנה עבר או שאין חיבור)") from exc
+    raise HandwritingError("שירות הקריאה לא זמין כרגע")
 
 
 class GeminiTranscriber(Transcriber):

@@ -137,3 +137,31 @@ def test_scan_without_a_reader_or_with_a_failing_reader_gives_a_clear_error():
     app.extensions["transcriber"] = FakeReader(fail=True)
     res = submit(app.test_client(), aid, "100000001", file=(io.BytesIO(b"\x89PNG fake"), "scan.png"))
     assert res.status_code == 400 and "boom" in res.get_json()["error"]
+
+
+def test_busy_service_is_retried_then_succeeds(monkeypatch):
+    import urllib.error
+    import urllib.request
+    from attendance import handwriting
+
+    calls = []
+
+    class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    def fake_urlopen(request, timeout):
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError("u", 503, "busy", {}, io.BytesIO(b"high demand"))
+        return Reply()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert handwriting._call(urllib.request.Request("http://x"), 5, waits=(0, 0, 0)) == {"ok": True}
+    assert len(calls) == 3
