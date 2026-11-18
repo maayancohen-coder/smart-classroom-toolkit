@@ -38,7 +38,7 @@ class Config:
     PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 
     # Protects the lecturer dashboard and API. Printed at startup if not set.
-    LECTURER_KEY = os.environ.get("LECTURER_KEY") or secrets.token_urlsafe(8)
+    LECTURER_KEY = (os.environ.get("LECTURER_KEY") or "").strip() or secrets.token_urlsafe(8)  # strip: a pasted space must not lock the lecturer out
 
     # People counting from the class photo (head-count gap).
     HEADCOUNT_TOLERANCE_PERCENT = float(os.environ.get("HEADCOUNT_TOLERANCE_PERCENT", 10))
