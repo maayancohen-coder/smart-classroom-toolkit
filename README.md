@@ -27,8 +27,8 @@ A web app (works on iPhone and Android, no installation) made of five tools.
 ### 1. Reliable attendance (core)
 
 1. **The lecturer opens a lecture.** The system shows a QR code on the classroom screen. The code changes every few seconds, so a photo of it quickly becomes useless.
-2. **The student scans the code** with the phone camera. The system verifies the attendance using the student's **location**, which must be inside the classroom area.
-3. **The lecturer uploads a photo of the class.** The system **counts the people in the photo** and sends the lecturer the **gap** between the number of students who marked attendance and the number of people actually in the room.
+2. **The student scans the code** with the phone camera and enters a personal PIN (chosen the first time). The system verifies the attendance using the student's **location**, which must be inside the classroom area and is mandatory: without it, attendance cannot be marked.
+3. **Head-count gap.** The lecturer enters the number of people in the room and the system shows the **gap** between that number and the number of check-ins. Counting people automatically from a class photo is part of the design, but was dropped from the demo because we could not get a stable result from a free service.
 4. The lecturer receives a sheet (online and Excel/CSV) of students marked present, suspect (with the reasons) or absent.
 
 ### 2. Student comments and suggestions
@@ -68,9 +68,10 @@ A student or teacher uploads homework and receives a detailed LLM review, includ
 
 ## Known limitations
 
-- The photo count tells the lecturer **how many** are missing, not **who**. For who, the system ranks students by the other signals (location, device, scan timing).
-- Indoor location is only accurate to tens of meters, so it proves "in the building", not "in this room". The QR code and the photo count cover that gap.
-- Students in the back rows may be hard to count, so the gap has a tolerance (10% of the check-ins).
+- The head count tells the lecturer **how many** are missing, not **who**. For who, the system ranks students by the other signals (location, device, PIN, scan timing).
+- Indoor location is only accurate to tens of meters, so it proves "in the building", not "in this room". The rotating QR code and the check of the location against the class group cover that gap.
+- If a photo is used, students in the back rows may be hard to count, so the gap has a tolerance (10% of the check-ins).
+- A student can give the personal PIN to a friend, and the first person to enter a student's ID chooses the PIN (the lecturer can reset it). The system flags some of these cases but does not claim to stop all of them.
 - Speech-to-text accuracy on Hebrew lectures with English technical terms must be measured, not assumed.
 - LLM output can be wrong. Summaries and reviews are presented as suggestions for a human to check.
 - Recordings contain students' voices, and homework comparison involves other students' work. Both need consent and privacy rules, described in the SRS.

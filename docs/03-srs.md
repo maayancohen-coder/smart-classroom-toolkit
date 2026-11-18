@@ -52,27 +52,34 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-8 | The system shall let a student check in by scanning the QR code with the phone camera, without installing an application. | M |
-| FR-9 | The system shall ask a student for their student ID the first time a phone is used, and bind that phone to that student. | M |
+| FR-9 | The system shall ask a student for their student ID, and bind the phone to that student the first time it is used. | M |
+| FR-9a | The system shall require a personal PIN of 4 to 6 digits on every check-in. The first time a student checks in, the PIN they enter becomes their PIN; later check-ins must match it, also from another phone or a private window. | M |
+| FR-9b | The system shall store only a salted hash of the PIN, and shall lock a student for 5 minutes after 5 wrong PINs. | M |
 | FR-10 | The system shall refuse a student ID that is not in the roster. | M |
 | FR-11 | The system shall ask the student's phone for its location and record up to several readings with their accuracy. | M |
-| FR-12 | The system shall run these checks on every check-in: token freshness (weak), device binding (strong), classroom location (strong), location plausibility (strong), campus network (weak). | M |
+| FR-11a | If the session has a classroom location and the student's phone does not provide a location (permission denied or unavailable), the system shall refuse the check-in and ask the student to allow location. Nothing is recorded. | M |
+| FR-12 | The system shall run these checks on every check-in. Strong: device binding, classroom location, location plausibility (accuracy better than 2 m), exactly the same coordinates as another student. Weak: token freshness, frozen location (identical readings), stale location reading (older than 60 s), same phone profile as another student, a repeated check-in from the same phone profile and network within 120 s, campus network. | M |
+| FR-12a | Once at least 6 check-ins have an accurate location, the system shall compute the centre and spread of the class group and shall mark a check-in suspect when its location is clearly outside that group, even if it is inside the lecturer's radius (note: "outside the class group"). | M |
 | FR-13 | The system shall mark a check-in **suspect** if at least one strong check fails or at least two weak checks fail, and otherwise **present**. | M |
 | FR-14 | The system shall store the reason for every failed check with the check-in. | M |
 | FR-15 | The system shall not show the student the status or reasons, only that the check-in was recorded. | M |
 | FR-16 | The system shall ignore a repeated check-in of the same student in the same session and confirm that attendance is already recorded. | M |
-| FR-17 | The system shall flag as suspect a check-in from a phone bound to another student, and a check-in of a bound student from another phone. | M |
-| FR-18 | The system shall allow the lecturer to reset the phone binding of a student. | S |
+| FR-17 | The system shall flag as suspect a check-in from a phone bound to another student. A check-in of a bound student from another phone is suspect unless the student proves their identity with the correct PIN. | M |
+| FR-18 | The system shall allow the lecturer to reset the phone binding and the PIN of a student. | S |
 | FR-19 | The system shall be extensible with new checks without changing existing checks. | M |
 
 ### 2.4 Head-count gap (UC4)
 
+**Status:** the gap logic and the manual entry (FR-23, FR-24, FR-24a) are implemented. Counting people from a photo (FR-20 to FR-22) is designed, with a swappable counter component, but was dropped from the demo because the free vision service did not give a stable result in our attempts (tools report, 3.6).
+
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-20 | The system shall let the lecturer upload one or more class photos. | M |
-| FR-21 | The system shall count the people in each photo and use the highest count for the session. | M |
-| FR-22 | The system shall delete the photo after counting and store only the count. | M |
+| FR-20 | The system should let the lecturer upload one or more class photos. **Designed, not in the demo** (see the note under 2.4). | S |
+| FR-21 | The system should count the people in each photo and use the highest count for the session. **Designed, not in the demo.** | S |
+| FR-22 | The system shall delete the photo after counting and store only the count. | S |
 | FR-23 | The system shall show the gap between the number of check-ins and the counted people. | M |
 | FR-24 | If the gap is larger than 10% of the check-ins (configurable), the system shall highlight the check-ins with the most failed checks. | M |
+| FR-24a | The system shall let the lecturer enter the head count by hand; the gap logic is the same. | M |
 
 ### 2.5 Attendance sheet (UC5, UC12)
 
@@ -150,7 +157,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 
 | ID | Requirement |
 |---|---|
-| NFR-15 | A student shall be able to check in with one scan and, after the first time, with no typing. |
+| NFR-15 | A student shall be able to check in with one scan and, after the first time, by typing only the personal PIN. |
 | NFR-16 | The lecturer shall open a session with one action and shall not need to do anything during the lecture. |
 | NFR-17 | The student pages shall work on current iPhone and Android browsers, with no installation. |
 | NFR-18 | The interface shall support Hebrew (right to left). |
@@ -159,7 +166,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 
 | ID | Requirement |
 |---|---|
-| NFR-19 | If location is unavailable or denied, the system shall record the check-in as suspect and not reject it. |
+| NFR-19 | If the session has a classroom location and the phone does not provide a location, the check-in shall be refused (FR-11a). If the classroom location was not set, no location is required. |
 | NFR-20 | If an external service (ASR, LLM, people counter) fails, the rest of the system shall keep working and the job shall be retryable. |
 | NFR-21 | ASR accuracy shall be measured on a real lecture sample and reported in the tools report. No accuracy is promised before the measurement. |
 | NFR-22 | LLM outputs shall be marked as suggestions to be checked by a person. |
@@ -180,12 +187,13 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 - Indoor location accuracy is limited to tens of meters.
 - External AI services are used for ASR, people counting and LLM tasks; the exact tools are selected in the tools report.
 
-### 4.1 Known limitations of device binding
+### 4.1 Identifying a person, and its limits
 
-- The device identifier lives in a browser cookie (NFR-5). A student who opens the link in a **private window**, or clears the site data, gets a new identifier. With it they can enter the ID of a friend who is not yet bound to any phone, and device binding alone will not detect this.
-- What still catches it: the location check, the head-count gap (FR-23, FR-24) and the other weak signals. The head-count gap is the main defence, because the number of check-ins will exceed the number of people in the photo.
-- Planned weak signal (not strong, to avoid false accusations): several check-ins from the same network address and the same browser type within a few minutes are flagged for the lecturer.
-- This limitation is accepted for the scope of the exercise and is listed again in the testing strategy (section 8, findings).
+- A phone is recognised by a random cookie (NFR-5). A **private window** or cleared site data gives a new cookie, so the cookie alone cannot tie a phone to a person.
+- What ties a **person** to a check-in is the personal PIN (FR-9a). A student who opens a private window to mark a friend must know the friend's PIN, and five wrong guesses lock the friend's account for 5 minutes (FR-9b). The PIN is not biometric; biometrics and passkeys were rejected for privacy and are only a possible future upgrade.
+- Signals that still help when the PIN is not enough: the same coordinates as another student, the same phone profile (model, screen, language, time zone) and the same network in a short time, and a location outside the class group.
+- Tested by hand on an iPhone: a private tab marking a second student was recorded as suspect with its reasons; a wrong PIN in a private tab was refused; denying location prevented the check-in; an old QR code was refused as expired.
+- **Accepted limits:** (1) the first person to enter a student's ID chooses that student's PIN, so the lecturer can reset it if the student reports a problem; (2) a student can give the PIN to a friend voluntarily; (3) two phones of the same model look alike, so the phone profile is only a weak signal; (4) indoor location is accurate to tens of meters and cannot separate neighbouring rooms.
 
 ## 5. Traceability
 

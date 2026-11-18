@@ -86,17 +86,18 @@ Status: draft v1
 - **Main flow:**
   1. Student scans the QR code with the phone camera, which opens the check-in page.
   2. System verifies the token is valid and recent.
-  3. If this phone is not yet known, student enters their student ID.
-  4. Student allows location sharing.
-  5. System runs the attendance checks (token freshness, device binding, classroom location, location plausibility, campus network).
+  3. Student enters their student ID (if the phone is not yet known) and their personal PIN. The first time, the PIN they enter becomes theirs.
+  4. Student allows location sharing. Without it the check-in is refused.
+  5. System verifies the PIN and runs the attendance checks (token freshness, device binding, classroom location, location plausibility, same coordinates, stale or frozen location, phone profile, class group, campus network).
   6. System records the check-in with a status (present or suspect) and the reasons.
   7. Student sees "attendance recorded". The status is **not** shown to the student.
 - **Alternate flows:**
   - 2a. Token expired or invalid: the check-in is refused and the student is asked to scan again.
   - 3a. Student ID not found in the roster: error, student can correct the number.
-  - 4a. Location denied: check-in is recorded as suspect.
+  - 3b. Wrong PIN: the check-in is refused. After 5 wrong PINs the student is locked for 5 minutes.
+  - 4a. Location denied or unavailable: the check-in is refused and the student is asked to allow location. Nothing is recorded.
   - 6a. The student already checked in: the system confirms and does not create a duplicate.
-  - 6b. The phone is already linked to another student: recorded as suspect.
+  - 6b. The phone is already linked to another student: recorded as suspect. A student who uses a new phone with the correct PIN is not suspect for that reason.
 - **Postcondition:** The check-in is stored; the sheet updates.
 
 ### UC4: Upload a class photo and get the head-count gap
@@ -112,6 +113,7 @@ Status: draft v1
   6. If the gap exceeds the tolerance, the system highlights the most suspect check-ins. The tolerance is **10% of the number of check-ins** (configurable), to allow for students hidden in back rows or behind others.
 - **Alternate flows:**
   - 3a. The counter fails or the image is unusable: system asks for another photo and keeps the session unchanged.
+- **Status:** designed; the demo supports only the manual head count. Counting from a photo was dropped from the demo (tools report, 3.6).
 - **Notes:** The gap says how many, not who. Back rows may be undercounted, hence the tolerance.
 
 ### UC5: View and export the attendance sheet

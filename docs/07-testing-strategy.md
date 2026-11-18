@@ -100,11 +100,19 @@ Each scenario uses a separate simulated phone.
 |---|---|---|
 | Honest student scans and checks in | PRESENT | FR-8, FR-12, FR-13 |
 | Student far from the classroom | SUSPECT, reason mentions distance | FR-12 |
-| Location denied | SUSPECT | NFR-19 |
+| Location denied | Check-in refused, nothing recorded | FR-11a, NFR-19 |
 | Unrealistically perfect location (accuracy under 2 m) | SUSPECT | FR-12 |
 | Identical coordinates in every reading, realistic accuracy | PRESENT with a note (weak signal only) | FR-12 |
 | One phone, two students | The second is SUSPECT | FR-17 |
-| Same student, new phone | SUSPECT; after lecturer reset it is PRESENT | FR-17, FR-18 |
+| Same student, new phone | With the correct PIN: PRESENT. Without PIN verification (PIN switched off): SUSPECT; after lecturer reset it is PRESENT | FR-17, FR-18 |
+| No PIN given | Refused | FR-9a |
+| Wrong PIN | Refused; after 5 wrong PINs even the right PIN is refused for 5 minutes | FR-9a, FR-9b |
+| Private window marking a friend, with the friend's wrong PIN | Refused | FR-9a |
+| Lecturer resets a student | The PIN can be chosen again | FR-18 |
+| Exactly the same coordinates as another student | SUSPECT, reason "same coordinates" | FR-12 |
+| Cached (old) location reading | PRESENT with a note (weak signal only) | FR-12 |
+| Same phone profile as another student | SUSPECT together with another weak signal | FR-12 |
+| Student inside the radius but away from the class group (7 students together) | SUSPECT, reason "outside the class group" | FR-12a |
 | Token older than the window | Refused | FR-7 |
 | Forged token | Refused | NFR-1 |
 | Same ticket used twice | Second use refused | NFR-2 |
@@ -113,10 +121,10 @@ Each scenario uses a separate simulated phone.
 | Student tries to check in after closing | Refused | FR-3 |
 | Lecturer adds a student after closing | Entry marked as added manually | FR-28 |
 | Student response never shows the status | Response has no status | FR-15 |
-| Photo upload with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24 |
+| Head count (typed) with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24, FR-24a |
 | Comment sent anonymously | No author in the lecturer view | FR-33 |
 
-A first set of 19 of these scenario tests is already written and passing in the demo code.
+49 automated tests (scenarios and head-count logic) are written and passing in the demo code.
 
 ## 7. Non-functional and AI-quality tests
 
@@ -142,7 +150,7 @@ A first set of 19 of these scenario tests is already written and passing in the 
 
 | What | Method | Result goes to |
 |---|---|---|
-| People counting | Run on the three class photos. Count by hand, in front, middle and back rows. Compare, and record the miss rate per row. Use it to confirm or change the 10% tolerance. | Tools report |
+| People counting | Attempted with a free vision service; no stable result, so no accuracy is claimed. The feature is not in the demo (tools report, 3.6). | Tools report |
 | Speech-to-text | Transcribe 3 to 5 minutes of a real lecture. Correct it by hand. Compute the word error rate (WER) for each candidate engine. | Tools report |
 | Term correction | Count technical terms that are wrong before and after the LLM correction with the slides as glossary. | Tools report |
 | LLM summary and homework review | There is no single right answer, so use a checklist: the summary covers the main topics of the lecture, invents nothing that is not in the transcript, and the review points at real parts of the homework. Two people mark each item. | Tools report |
@@ -153,12 +161,12 @@ A first set of 19 of these scenario tests is already written and passing in the 
 |---|---|
 | iPhone (Safari): scan, location prompt, check-in | |
 | Android (Chrome): scan, location prompt, check-in | |
-| Location permission denied | Recorded as suspect, no crash |
+| Location permission denied | Check-in refused with a clear message, no crash |
 | Phone on mobile data and on campus Wi-Fi | Both work |
 | Hebrew text and right-to-left layout on the phone | Correct |
 | QR visible on the projector from the back of the room | Readable |
 | 10 or more students check in at once | The sheet updates |
-| Photo of the real classroom gives a count | Within tolerance |
+| Photo of the real classroom gives a count | Not in the demo |
 | Secure link opens on a phone that is not on the lecturer's network | Works |
 
 ### Findings from the first real-device run (iPhone, hosted demo)
@@ -168,7 +176,9 @@ A first set of 19 of these scenario tests is already written and passing in the 
 | A real student was marked SUSPECT with "location frozen across readings". | A phone resting on a desk can report the same coordinates in every reading. | The check was made a **weak** signal; one weak failure alone no longer makes a student suspect. A scenario test covers it. |
 | Marking two students from one phone was not flagged at first. | The device identifier was new on each scan (hosted server had restarted, which clears memory). After a stable run the phone was recognised ("known device") and no second ID could be entered. | Keep the diagnostic device tag in the demo. Document the private-window limitation (SRS 4.1). |
 | The free hosting server sleeps after inactivity and forgets all data. | In-memory storage by design for the demo. | Open the page a few minutes before the demo; export the sheet to Excel or CSV before closing. |
-| Desktop browser location is only accurate to tens of meters (about 35 m error). | Indoor positioning. | Use a radius of 500 m in the demo; the QR and the photo count cover the room-level check. |
+| Desktop browser location is only accurate to tens of meters (about 35 m error). | Indoor positioning. | Use a radius of 500 m in the demo; the QR and the class-group check cover the room-level check. |
+| A private window on the same phone marking a second student was recorded as present before the new checks. | The cookie changes in a private window. | Added checks for the same phone profile, the same coordinates and the class group, and a personal PIN. A private tab marking a second student is now recorded as suspect with its reasons, and a wrong PIN in a private tab is refused (confirmed by hand on an iPhone). |
+| A hosting environment variable with its name and value swapped gave a 403 on the lecturer page. | The server used a random lecturer key. | Spaces around the key are ignored; checking the variable is part of the demo preparation. |
 
 A dry run of the 10-minute demo is performed once the day before.
 
