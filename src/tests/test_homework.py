@@ -165,3 +165,27 @@ def test_busy_service_is_retried_then_succeeds(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     assert handwriting._call(urllib.request.Request("http://x"), 5, waits=(0, 0, 0)) == {"ok": True}
     assert len(calls) == 3
+
+
+def test_gemini_3_reads_with_low_thinking_and_older_models_do_not(monkeypatch):
+    import json
+    import urllib.request
+    from attendance.handwriting import GeminiTranscriber
+
+    sent = []
+
+    class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"candidates": [{"content": {"parts": [{"text": "hello"}]}}]}'
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout: sent.append(json.loads(request.data)) or Reply())
+    assert GeminiTranscriber("k", "gemini-3.8-flash").transcribe(b"x", "application/pdf") == "hello"
+    GeminiTranscriber("k", "gemini-2.5-flash").transcribe(b"x", "application/pdf")
+    assert sent[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
+    assert "thinkingConfig" not in sent[1]["generationConfig"]

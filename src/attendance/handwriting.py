@@ -58,9 +58,12 @@ class GeminiTranscriber(Transcriber):
         self.api_key, self.model, self.timeout = api_key, model, timeout
 
     def transcribe(self, data: bytes, mime: str) -> str:
+        generation = {"temperature": 0}
+        if self.model.startswith("gemini-3"):
+            generation["thinkingConfig"] = {"thinkingLevel": "low"}   # reading text needs no long reasoning
         body = json.dumps({"contents": [{"parts": [
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("ascii")}},
-            {"text": PROMPT}]}], "generationConfig": {"temperature": 0}}).encode("utf-8")
+            {"text": PROMPT}]}], "generationConfig": generation}).encode("utf-8")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         request = urllib.request.Request(url, data=body, method="POST", headers={
             "content-type": "application/json", "x-goog-api-key": self.api_key})
