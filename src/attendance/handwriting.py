@@ -47,7 +47,7 @@ def _call(request: urllib.request.Request, timeout: float, waits: tuple = RETRY_
             detail = exc.read().decode("utf-8", errors="replace")[:300]
             raise HandwritingError(f"שירות הקריאה החזיר שגיאה {exc.code}: {detail}") from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-            raise HandwritingError("לא הצלחתי להגיע לשירות הקריאה (זמן ההמתנה עבר או שאין חיבור)") from exc
+            raise HandwritingError(f"לא הצלחתי להגיע לשירות הקריאה ({type(exc).__name__}: {str(exc)[:150]})") from exc
     raise HandwritingError("שירות הקריאה לא זמין כרגע")
 
 
