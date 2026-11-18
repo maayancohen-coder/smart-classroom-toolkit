@@ -19,6 +19,13 @@ SAMPLE_REAL = [  # jittery, imprecise: what a real indoor fix looks like
 
 class TestConfig(Config):
     LECTURER_KEY = "test-key"
+    REQUIRE_PIN = False             # the PIN and location-blocking scenarios use StrictConfig below
+    BLOCK_WITHOUT_LOCATION = False
+
+
+class StrictConfig(TestConfig):
+    REQUIRE_PIN = True
+    BLOCK_WITHOUT_LOCATION = True
 
 
 @pytest.fixture()
@@ -53,9 +60,11 @@ def near(student_id, dx=0.0):
     return [{**s, "lat": s["lat"] + k, "lng": s["lng"] - k / 2} for s in SAMPLE_REAL]
 
 
-def submit(phone, nonce, student_id, samples=None, denied=False, headers=None, fp="", client_now=None):
+def submit(phone, nonce, student_id, samples=None, denied=False, headers=None, fp="", client_now=None, pin=None):
     body = {"nonce": nonce, "student_id": student_id,
             "samples": near(student_id) if samples is None else samples, "denied": denied}
+    if pin:
+        body["pin"] = pin
     if fp:
         body["fp"] = fp
     if client_now is not None:
@@ -300,3 +309,82 @@ def test_student_inside_building_but_away_from_class_is_flagged(env):
     row = status_of(lecturer, sid, "100000009")
     assert row["status"] == "suspect" and "outside the class group" in row["notes"] and row["zone"] == "nearby"
     assert status_of(lecturer, sid, "100000001")["status"] == "present"
+
+
+@pytest.fixture()
+def strict():
+    app = create_app(StrictConfig)
+    lecturer = app.test_client()
+    lecturer.get("/lecturer?key=test-key")
+    sid = lecturer.post("/api/session", json={
+        "course": "Test", "lat": CLASSROOM[0], "lng": CLASSROOM[1], "radius": 100}).get_json()["session_id"]
+    return app, app.extensions["attendance_service"], lecturer, sid
+
+
+def test_no_location_permission_means_no_attendance(strict):
+    app, _, lecturer, sid = strict
+    phone = app.test_client()
+    res = submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000001", samples=[], denied=True, pin="1234")
+    assert res.status_code == 400 and "מיקום" in res.get_json()["error"]
+    assert status_of(lecturer, sid, "100000001")["status"] == "absent"
+
+
+def test_pin_is_required(strict):
+    app, _, lecturer, sid = strict
+    phone = app.test_client()
+    res = submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000001")
+    assert res.status_code == 400 and status_of(lecturer, sid, "100000001")["status"] == "absent"
+
+
+def test_private_window_with_friends_id_but_no_pin_is_blocked(strict):
+    app, _, lecturer, sid = strict
+    owner = app.test_client()
+    submit(owner, open_checkin(owner, qr_path(lecturer, sid)), "100000001", pin="4321")  # first time sets the PIN
+    private = app.test_client()                      # fresh cookie jar: looks like a new phone
+    res = submit(private, open_checkin(private, qr_path(lecturer, sid)), "100000002", pin="1111")
+    assert res.get_json()["ok"] is True              # her own ID, her own first PIN: fine
+    # Now the cheater tries to sign the absent friend (103) from the same private window, guessing a PIN.
+    friend = app.test_client()
+    submit(friend, open_checkin(friend, qr_path(lecturer, sid)), "100000003", pin="5555")  # friend registers own PIN
+    cheat = app.test_client()
+    res = submit(cheat, open_checkin(cheat, qr_path(lecturer, sid)), "100000003", pin="0000")
+    assert res.status_code == 400 and "שגוי" in res.get_json()["error"]
+
+
+def test_legit_student_on_new_phone_with_correct_pin_is_present(strict):
+    app, _, lecturer, sid = strict
+    first = app.test_client()
+    submit(first, open_checkin(first, qr_path(lecturer, sid)), "100000001", pin="4321")
+    lecturer.post("/api/session", json={})  # noop
+    # Same student, next lecture, private window (no cookie): PIN proves identity.
+    sid2 = lecturer.post("/api/session", json={"course": "T2", "lat": CLASSROOM[0], "lng": CLASSROOM[1],
+                                               "radius": 100}).get_json()["session_id"]
+    private = app.test_client()
+    res = submit(private, open_checkin(private, qr_path(lecturer, sid2)), "100000001", pin="4321")
+    assert res.get_json()["ok"] is True
+    assert status_of(lecturer, sid2, "100000001")["status"] == "present"
+
+
+def test_pin_locks_after_repeated_wrong_guesses(strict):
+    app, _, lecturer, sid = strict
+    owner = app.test_client()
+    submit(owner, open_checkin(owner, qr_path(lecturer, sid)), "100000001", pin="4321")
+    sid2 = lecturer.post("/api/session", json={"course": "T2", "lat": CLASSROOM[0], "lng": CLASSROOM[1],
+                                               "radius": 100}).get_json()["session_id"]
+    last = None
+    for guess in ("0001", "0002", "0003", "0004", "0005", "4321"):  # the right PIN is rejected once locked
+        attacker = app.test_client()
+        last = submit(attacker, open_checkin(attacker, qr_path(lecturer, sid2)), "100000001", pin=guess)
+    assert last.status_code == 400 and "ניסיונות" in last.get_json()["error"]
+
+
+def test_lecturer_reset_clears_pin(strict):
+    app, _, lecturer, sid = strict
+    phone = app.test_client()
+    submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000001", pin="4321")
+    lecturer.post(f"/api/session/{sid}/reset_device", json={"student_id": "100000001"})
+    sid2 = lecturer.post("/api/session", json={"course": "T2", "lat": CLASSROOM[0], "lng": CLASSROOM[1],
+                                               "radius": 100}).get_json()["session_id"]
+    again = app.test_client()
+    res = submit(again, open_checkin(again, qr_path(lecturer, sid2)), "100000001", pin="9999")  # new PIN accepted
+    assert res.get_json()["ok"] is True

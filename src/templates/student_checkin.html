@@ -12,6 +12,10 @@
   </div>
   {% if known_name %}<p style="font-size:1.15rem">שלום <strong>{{ known_name }}</strong></p>{% endif %}
 
+  <label for="pin">קוד אישי (4–6 ספרות)</label>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="••••">
+  <p class="muted" style="font-size:.9rem">בפעם הראשונה בחרו קוד וזכרו אותו – בכל סימון הבא תזינו אותו שוב.</p>
+
   <button class="full" id="go">סמן נוכחות</button>
   <p id="msg" role="status"></p>
   <p class="muted" style="font-size:.75rem">מכשיר: {{ device_tag }} · {{ "חדש" if device_new else "מוכר" }}</p>
@@ -64,6 +68,8 @@ $("go").addEventListener("click", async () => {
   const msg = $("msg"), btn = $("go");
   const sid = $("sid") ? $("sid").value.trim() : "";
   if (!KNOWN && !sid) { msg.textContent = "יש להזין מספר סטודנט"; return; }
+  const pin = $("pin").value.trim();
+  if (!/^\d{4,6}$/.test(pin)) { msg.textContent = "יש להזין קוד אישי של 4 עד 6 ספרות"; return; }
   btn.disabled = true;
   msg.textContent = NEEDS_LOCATION ? "מאמת מיקום… (אשרו גישה למיקום)" : "שולח…";
   const loc = NEEDS_LOCATION ? await collectLocation() : { samples: [], denied: false };
@@ -71,7 +77,7 @@ $("go").addEventListener("click", async () => {
   try {
     const res = await fetch("/api/checkin", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nonce: NONCE, student_id: sid, samples: loc.samples, denied: loc.denied,
+      body: JSON.stringify({ nonce: NONCE, student_id: sid, pin, samples: loc.samples, denied: loc.denied,
                              fp, client_now: Date.now() / 1000 })
     });
     const data = await res.json();

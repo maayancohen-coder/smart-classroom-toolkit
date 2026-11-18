@@ -25,6 +25,7 @@ class CheckContext:
     ip: str
     fingerprint: str = ""            # hash of phone model / screen / language settings (not a secret)
     client_now: Optional[float] = None  # the phone's clock when it submitted, to spot cached GPS fixes
+    pin_verified: bool = False       # the student proved who they are with their personal PIN
 
 
 class AttendanceCheck(ABC):
@@ -70,6 +71,9 @@ class DeviceBindingCheck(AttendanceCheck):
             return self._fail(f"phone already registered to student {owner}")
         bound_device = self.registry.device_for_student(ctx.student.student_id)
         if bound_device is not None and bound_device != ctx.device_id:
+            if ctx.pin_verified:
+                # New phone or private window, but the person proved who they are: not a cheat signal.
+                return self._ok("different phone, personal PIN verified")
             return self._fail("checked in from a different phone than registered")
         return self._ok()
 

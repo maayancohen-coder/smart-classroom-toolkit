@@ -17,7 +17,7 @@ from .geo import haversine_meters, ip_in_networks, network_of
 from .headcount import HeadCountSummary, summarize
 from .models import (AttendanceStatus, CheckIn, CheckInTicket, LectureSession, LocationReport,
                      RejectedAttempt, Student)
-from .repository import DeviceRegistry, Roster, SessionStore
+from .repository import DeviceRegistry, PinStore, Roster, SessionStore
 from .tokens import TokenService
 
 
@@ -40,6 +40,7 @@ class AttendanceService:
         self.store = store
         self.tokens = tokens
         self.counter = counter
+        self.pins = PinStore(config.PIN_MAX_ATTEMPTS, config.PIN_LOCK_SECONDS)
         self.evaluator = AttendanceEvaluator([
             TokenFreshnessCheck(config.MAX_TOKEN_AGE_SECONDS),
             DeviceBindingCheck(registry),
@@ -94,7 +95,7 @@ class AttendanceService:
 
     def check_in(self, nonce: str, device_id: str, student_id: Optional[str],
                  location: LocationReport, ip: str, fingerprint: str = "",
-                 client_now: Optional[float] = None) -> CheckInOutcome:
+                 client_now: Optional[float] = None, pin: Optional[str] = None) -> CheckInOutcome:
         ticket = self.store.consume_ticket(nonce, self.config.TICKET_TTL_SECONDS)
         if ticket is None:
             raise CheckInError("פג הזמן לסימון. סרקו שוב את הקוד שעל המסך.")
@@ -108,10 +109,31 @@ class AttendanceService:
             ticket.used = False  # let them fix a typo without rescanning
             raise CheckInError("מספר הסטודנט לא נמצא ברשימת הכיתה")
 
+        if self.config.BLOCK_WITHOUT_LOCATION and session.has_geofence \
+                and (location.denied or not location.samples):
+            ticket.used = False
+            raise CheckInError("יש לאשר גישה למיקום בדפדפן כדי לסמן נוכחות. אשרו ונסו שוב.")
+
+        pin_verified = False
+        if self.config.REQUIRE_PIN:
+            pin = (pin or "").strip()
+            if not (pin.isdigit() and 4 <= len(pin) <= 6):
+                ticket.used = False
+                raise CheckInError("יש להזין קוד אישי של 4 עד 6 ספרות")
+            verdict = self.pins.check_or_set(student.student_id, pin)
+            if verdict == PinStore.LOCKED:
+                ticket.used = False
+                raise CheckInError("יותר מדי ניסיונות שגויים. נסו שוב בעוד כמה דקות או פנו למרצה.")
+            if verdict == PinStore.WRONG:
+                ticket.used = False
+                raise CheckInError("קוד אישי שגוי")
+            pin_verified = True
+
         if student.student_id in session.checkins:
             return CheckInOutcome(student, already_checked_in=True)
 
-        ctx = CheckContext(session, student, device_id, ticket, location, ip, fingerprint, client_now)
+        ctx = CheckContext(session, student, device_id, ticket, location, ip, fingerprint, client_now,
+                           pin_verified)
         status, results = self.evaluator.evaluate(ctx)
 
         best = location.best()
@@ -125,6 +147,11 @@ class AttendanceService:
         # Register the phone only after evaluation, and only if nobody owns it yet.
         self.registry.bind_if_free(student.student_id, device_id)
         return CheckInOutcome(student, already_checked_in=False)
+
+    def reset_student(self, student_id: str) -> None:
+        """Lecturer action: forget the phone and the PIN (new phone, forgotten PIN)."""
+        self.registry.reset_student(student_id)
+        self.pins.reset(student_id)
 
     def student_for_device(self, device_id: str) -> Optional[Student]:
         sid = self.registry.student_for_device(device_id)

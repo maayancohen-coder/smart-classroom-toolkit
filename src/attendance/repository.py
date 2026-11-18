@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import hmac
 import secrets
 import threading
 import time
@@ -57,6 +59,52 @@ class DeviceRegistry:
             device = self._student_to_device.pop(student_id, None)
             if device:
                 self._device_to_student.pop(device, None)
+
+
+class PinStore:
+    """Personal PIN per student: chosen on the first check-in, required on every later one.
+
+    Only a salted hash is kept. Repeated wrong guesses lock the student for a while, so a 4-digit PIN
+    cannot be brute-forced from another phone or a private window.
+    """
+    SET, OK, WRONG, LOCKED = "set", "ok", "wrong", "locked"
+
+    def __init__(self, max_attempts: int = 5, lock_seconds: float = 300):
+        self._hashes: dict[str, tuple[bytes, bytes]] = {}
+        self._failures: dict[str, tuple[int, float]] = {}   # student -> (count, locked_until)
+        self.max_attempts = max_attempts
+        self.lock_seconds = lock_seconds
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _hash(pin: str, salt: bytes) -> bytes:
+        return hashlib.pbkdf2_hmac("sha256", pin.encode(), salt, 60_000)
+
+    def check_or_set(self, student_id: str, pin: str) -> str:
+        with self._lock:
+            count, locked_until = self._failures.get(student_id, (0, 0.0))
+            if locked_until > time.time():
+                return self.LOCKED
+            stored = self._hashes.get(student_id)
+            if stored is None:
+                salt = secrets.token_bytes(16)
+                self._hashes[student_id] = (salt, self._hash(pin, salt))
+                return self.SET
+            if hmac.compare_digest(stored[1], self._hash(pin, stored[0])):
+                self._failures.pop(student_id, None)
+                return self.OK
+            count += 1
+            until = time.time() + self.lock_seconds if count >= self.max_attempts else 0.0
+            self._failures[student_id] = (0 if until else count, until)
+            return self.LOCKED if until else self.WRONG
+
+    def has_pin(self, student_id: str) -> bool:
+        return student_id in self._hashes
+
+    def reset(self, student_id: str) -> None:
+        with self._lock:
+            self._hashes.pop(student_id, None)
+            self._failures.pop(student_id, None)
 
 
 class SessionStore:

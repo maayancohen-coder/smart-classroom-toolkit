@@ -57,3 +57,9 @@ class Config:
     STALE_FIX_SECONDS = _env_int("STALE_FIX_SECONDS", 60)             # a cached GPS fix older than this is suspicious
     CLUSTER_MIN_POINTS = _env_int("CLUSTER_MIN_POINTS", 6)            # check-ins needed before the class group is trusted
     CLUSTER_MIN_RADIUS_METERS = float(os.environ.get("CLUSTER_MIN_RADIUS_METERS", 30))
+
+    # Identity and location are mandatory.
+    REQUIRE_PIN = True                  # personal PIN per student (ties a person to a check-in on any phone)
+    BLOCK_WITHOUT_LOCATION = True       # no location permission -> no check-in at all (when the class has a geofence)
+    PIN_MAX_ATTEMPTS = 5
+    PIN_LOCK_SECONDS = 300

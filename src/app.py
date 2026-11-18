@@ -141,7 +141,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         student_id = str(data.get("student_id") or "").strip() or None
         try:
             outcome = service.check_in(str(data.get("nonce") or ""), did, student_id, location,
-                                       request.remote_addr or "", fingerprint, client_now)
+                                       request.remote_addr or "", fingerprint, client_now,
+                                       str(data.get("pin") or ""))
         except CheckInError as exc:
             return with_device_cookie(make_response(jsonify(ok=False, error=str(exc)), 400), did, is_new)
         # The student is told only that they were recorded - never their status, so a cheater
@@ -226,7 +227,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         get_session_or_404(session_id)
         student_id = str((request.get_json(silent=True) or {}).get("student_id") or "")
-        service.registry.reset_student(student_id)
+        service.reset_student(student_id)
         return jsonify(ok=True)
 
     @app.get("/api/session/<session_id>/report.<fmt>")
