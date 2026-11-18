@@ -15,6 +15,7 @@ from attendance.report import to_csv, to_xlsx
 from attendance.repository import DeviceRegistry, Roster, SessionStore
 from attendance.service import AttendanceService, CheckInError
 from attendance.tokens import TokenService
+from attendance.transcript import correct_transcript, parse_glossary
 
 DEVICE_COOKIE = "did"
 LECTURER_COOKIE = "lk"
@@ -100,6 +101,12 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         session = get_session_or_404(session_id)
         return render_template("lecturer_live.html", session=session,
                                period=config.TOKEN_PERIOD_SECONDS)
+
+    @app.get("/lecturer/<session_id>/transcript")
+    def lecturer_transcript(session_id):
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        return render_template("lecturer_transcript.html", session=session)
 
     @app.get("/c/<session_id>/<int:slot>/<signature>")
     def student_scan(session_id, slot, signature):
@@ -215,6 +222,30 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return jsonify(ok=False, error=str(exc)), 400
         summary = service.head_count_summary(session)
         return jsonify(ok=True, headcount=summary.as_dict())
+
+    @app.post("/api/session/<session_id>/transcript")
+    def api_transcript(session_id):
+        """Correct a transcript with the lecturer's glossary and keep both versions with the session."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        data = request.get_json(silent=True) or {}
+        raw = str(data.get("raw") or "")[:200_000]
+        glossary_text = str(data.get("glossary") or "")[:5_000]
+        result = correct_transcript(raw, parse_glossary(glossary_text))
+        session.transcript_raw, session.transcript_corrected = raw, result.text
+        session.transcript_glossary = glossary_text
+        return jsonify(ok=True, corrected=result.text, missing=result.missing,
+                       fixes=[{"heard": f.heard, "term": f.term} for f in result.fixes])
+
+    @app.get("/api/session/<session_id>/transcript.txt")
+    def api_transcript_download(session_id):
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        body = session.transcript_corrected or session.transcript_raw
+        if not body:
+            abort(404)
+        return Response(body, mimetype="text/plain; charset=utf-8",
+                        headers={"Content-Disposition": "attachment; filename=transcript.txt"})
 
     @app.post("/api/session/<session_id>/close")
     def api_close(session_id):

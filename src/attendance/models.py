@@ -104,6 +104,9 @@ class LectureSession:
     head_count_method: str = ""
     head_count_confidence: str = ""
     head_count_note: str = ""
+    transcript_raw: str = ""        # what the speech recognition heard
+    transcript_corrected: str = ""  # after the glossary correction
+    transcript_glossary: str = ""
 
     @property
     def has_geofence(self) -> bool:
