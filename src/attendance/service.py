@@ -179,6 +179,22 @@ class AttendanceService:
                          self.config.HEADCOUNT_TOLERANCE_PERCENT, session.head_count_confidence,
                          session.head_count_note)
 
+    # ---- lecturer decision on a suspect check-in ----------------------------------
+    def set_approval(self, session: LectureSession, student_id: str, approved: bool) -> None:
+        """The checks only flag; the lecturer decides. Approving makes the student present, and the
+        reasons stay visible. Undoing restores what the checks had decided."""
+        checkin = session.checkins.get(student_id)
+        if checkin is None:
+            raise CheckInError("הסטודנט לא סימן נוכחות בשיעור הזה")
+        if approved and not checkin.approved_by_lecturer:
+            checkin.original_status = checkin.status
+            checkin.approved_by_lecturer = True
+            checkin.status = AttendanceStatus.PRESENT
+        elif not approved and checkin.approved_by_lecturer:
+            checkin.approved_by_lecturer = False
+            checkin.status = checkin.original_status or checkin.status
+            checkin.original_status = None
+
     # ---- class group -------------------------------------------------------------
     def class_cluster(self, session: LectureSession) -> Optional[ClassCluster]:
         fixes = [(c.location.lat, c.location.lng, c.location.accuracy)
@@ -194,17 +210,18 @@ class AttendanceService:
             if checkin is None:
                 rows.append({"student_id": student.student_id, "name": student.name,
                              "status": AttendanceStatus.ABSENT.value, "time": None,
-                             "distance_m": None, "token_age_s": None, "notes": "", "zone": ""})
+                             "distance_m": None, "token_age_s": None, "notes": "", "zone": "", "approved": False})
                 continue
             rows.append({
-                "student_id": student.student_id, "name": student.name,
+                "student_id": student.student_id, "name": student.name, "approved": checkin.approved_by_lecturer,
                 "status": checkin.status.value, "time": checkin.at,
                 "distance_m": round(checkin.distance_meters) if checkin.distance_meters is not None else None,
                 "token_age_s": round(checkin.token_age_seconds, 1),
                 "notes": "; ".join(checkin.failed_reasons()), "zone": "",
             })
             loc = checkin.location
-            if cluster and loc and cluster.is_outside(loc.lat, loc.lng, loc.accuracy):
+            if cluster and loc and not checkin.approved_by_lecturer \
+                    and cluster.is_outside(loc.lat, loc.lng, loc.accuracy):
                 # Inside the building radius but away from where the class actually sits.
                 row = rows[-1]
                 where = "nearby" if (checkin.distance_meters is None
@@ -214,5 +231,8 @@ class AttendanceService:
                 row["notes"] = (row["notes"] + "; " if row["notes"] else "") + extra
                 if row["status"] == AttendanceStatus.PRESENT.value:
                     row["status"] = AttendanceStatus.SUSPECT.value
+        for row in rows:
+            if row.get("approved"):
+                row["notes"] = "approved by lecturer" + (f" (flagged: {row['notes']})" if row["notes"] else "")
         order = {"suspect": 0, "absent": 1, "present": 2}
         return sorted(rows, key=lambda r: (order[r["status"]], r["name"]))

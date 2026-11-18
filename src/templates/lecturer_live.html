@@ -66,7 +66,7 @@
   <div class="card">
     <div class="counts" id="counts"></div>
     <table>
-      <thead><tr><th>סטטוס</th><th>שם</th><th>שעה</th><th>מרחק</th><th>הערות</th></tr></thead>
+      <thead><tr><th>סטטוס</th><th>שם</th><th>שעה</th><th>מרחק</th><th>הערות</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -112,9 +112,19 @@ async function refreshReport() {
     const t = r.time ? new Date(r.time * 1000).toLocaleTimeString("he-IL") : "";
     return `<tr class="${highlighted.has(r.student_id) ? "hl" : ""}"><td><span class="tag ${r.status}">${LABEL[r.status]}</span></td>
       <td>${esc(r.name)}</td><td>${t}</td><td>${r.distance_m != null ? r.distance_m + " מ׳" : ""}</td>
-      <td class="notes">${esc(r.notes)}</td></tr>`;
+      <td class="notes">${esc(r.notes)}</td>
+      <td>${r.approved ? `<button class="secondary" data-approve="0" data-sid="${esc(r.student_id)}">בטל אישור</button>`
+          : r.status === "suspect" ? `<button class="secondary" data-approve="1" data-sid="${esc(r.student_id)}">אשר נוכחות</button>` : ""}</td></tr>`;
   }).join("");
 }
+$("rows").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-sid]");
+  if (!b) return;
+  b.disabled = true;
+  await fetch(`/api/session/${SID}/approve`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_id: b.dataset.sid, approved: b.dataset.approve === "1" }) });
+  refreshReport();
+});
 const VERDICT = {
   ok: "הפער בטווח הסביר.",
   gap: "פער חריג: ייתכן שחלק מהנרשמים לא היו בכיתה. הנרשמים עם הכי הרבה סימנים חשודים מסומנים בצהוב.",

@@ -73,6 +73,8 @@ class CheckIn:
     results: list[CheckResult]
     status: AttendanceStatus
     fingerprint: str = ""
+    approved_by_lecturer: bool = False   # the lecturer accepted a suspect check-in
+    original_status: Optional[AttendanceStatus] = None   # what the checks decided, to undo an approval
 
     def failed_reasons(self) -> list[str]:
         return [r.reason for r in self.results if not r.passed]

@@ -222,6 +222,18 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         service.close_session(get_session_or_404(session_id))
         return jsonify(ok=True)
 
+    @app.post("/api/session/<session_id>/approve")
+    def api_approve(session_id):
+        """The lecturer accepts (or takes back the acceptance of) a suspect check-in."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        data = request.get_json(silent=True) or {}
+        try:
+            service.set_approval(session, str(data.get("student_id") or ""), bool(data.get("approved", True)))
+        except CheckInError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        return jsonify(ok=True)
+
     @app.post("/api/session/<session_id>/reset_device")
     def api_reset_device(session_id):
         require_lecturer()

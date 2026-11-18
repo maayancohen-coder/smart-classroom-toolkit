@@ -388,3 +388,61 @@ def test_lecturer_reset_clears_pin(strict):
     again = app.test_client()
     res = submit(again, open_checkin(again, qr_path(lecturer, sid2)), "100000001", pin="9999")  # new PIN accepted
     assert res.get_json()["ok"] is True
+
+
+def make_suspect(env, student="100000001"):
+    app, _, lecturer, sid = env
+    phone = app.test_client()
+    far = [{"lat": 32.2, "lng": 34.9, "accuracy": 20}] * 3
+    submit(phone, open_checkin(phone, qr_path(lecturer, sid)), student, samples=far)
+    assert status_of(lecturer, sid, student)["status"] == "suspect"
+
+
+def approve(lecturer, sid, student, approved=True):
+    return lecturer.post(f"/api/session/{sid}/approve", json={"student_id": student, "approved": approved})
+
+
+def test_lecturer_can_approve_a_suspect_and_the_reasons_stay(env):
+    _, _, lecturer, sid = env
+    make_suspect(env)
+    assert approve(lecturer, sid, "100000001").get_json()["ok"] is True
+    row = status_of(lecturer, sid, "100000001")
+    assert row["status"] == "present" and row["approved"] is True
+    assert "approved by lecturer" in row["notes"] and "flagged" in row["notes"]
+    counts = lecturer.get(f"/api/session/{sid}/report").get_json()["counts"]
+    assert counts["present"] == 1 and counts["suspect"] == 0
+
+
+def test_approval_can_be_undone(env):
+    _, _, lecturer, sid = env
+    make_suspect(env)
+    approve(lecturer, sid, "100000001")
+    approve(lecturer, sid, "100000001", approved=False)
+    row = status_of(lecturer, sid, "100000001")
+    assert row["status"] == "suspect" and row["approved"] is False
+
+
+def test_approved_student_is_not_flagged_again_by_the_class_group(env):
+    app, _, lecturer, sid = env
+    for i in range(1, 8):
+        phone = app.test_client()
+        submit(phone, open_checkin(phone, qr_path(lecturer, sid)), f"10000000{i}")
+    away = [{"lat": 32.0853 + 0.0007, "lng": 34.7818, "accuracy": 10}] * 2 + [{"lat": 32.0853 + 0.00071, "lng": 34.7818, "accuracy": 10}]
+    phone = app.test_client()
+    submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000009", samples=away)
+    assert status_of(lecturer, sid, "100000009")["status"] == "suspect"
+    approve(lecturer, sid, "100000009")
+    assert status_of(lecturer, sid, "100000009")["status"] == "present"
+
+
+def test_cannot_approve_someone_who_did_not_check_in(env):
+    _, _, lecturer, sid = env
+    res = approve(lecturer, sid, "100000002")
+    assert res.status_code == 400 and status_of(lecturer, sid, "100000002")["status"] == "absent"
+
+
+def test_only_the_lecturer_can_approve(env):
+    app, _, lecturer, sid = env
+    make_suspect(env)
+    assert approve(app.test_client(), sid, "100000001").status_code == 403
+    assert status_of(lecturer, sid, "100000001")["status"] == "suspect"
