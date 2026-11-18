@@ -78,17 +78,17 @@ A student or teacher uploads homework and receives a detailed LLM review, includ
 
 ## Documentation
 
-Planned documents, in order (see `docs/`):
+Documents, in order (in `docs/`):
 
-1. Tools report
-2. Statement of Work (SoW)
-3. Software Requirements Specification (SRS)
-4. Use cases and user stories
-5. Software components
-6. Class and sequence diagrams
-7. Testing strategy
-8. Implementation approach and demo notes
-9. Summary
+1. Tools report (`01-tools-report.md`)
+2. Statement of Work (`02-sow.md`)
+3. Software Requirements Specification (`03-srs.md`)
+4. Use cases and user stories (`04-use-cases.md`)
+5. Software components (`05-components.md`)
+6. Class and sequence diagrams (`06-class-and-sequence-diagrams.md`, images in `docs/diagrams/`)
+7. Testing strategy (`07-testing-strategy.md`)
+8. Implementation approach and demo notes (`08-demo-notes.md`)
+9. Summary (`09-summary.md`)
 
 ## Authors
 

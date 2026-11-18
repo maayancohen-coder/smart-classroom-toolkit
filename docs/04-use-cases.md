@@ -19,7 +19,7 @@ Status: draft v1
 | UC1 | Open a lecture session | Lecturer | Core |
 | UC2 | Display the rotating QR code | Lecturer | Core |
 | UC3 | Mark attendance | Student | Core |
-| UC4 | Upload a class photo and get the head-count gap | Lecturer | Core |
+| UC4 | Upload a class photo and get the head-count gap | Lecturer | Designed (the demo takes a typed count) |
 | UC5 | View and export the attendance sheet | Lecturer | Core |
 | UC6 | Close a lecture session | Lecturer | Core |
 | UC7 | Reset a student's phone binding | Lecturer | Secondary |
@@ -194,7 +194,7 @@ Status: draft v1
 | Question | Decision |
 |---|---|
 | Can students check in after the lecture is closed? | No. Only the lecturer can add students to a closed lecture (UC12), and the entry is marked as added manually. |
-| What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. To be validated with the class-photo experiment. |
+| What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. Not validated: the class-photo experiment was dropped (tools report, 3.6). |
 | Are comments anonymous? | The student chooses for each comment: anonymous or with their name. |
 | Where does the lecture recording come from? | The lecturer uploads the file; there is no Zoom or Meet integration. |
 | How is the transcript kept accurate? | A speech-to-text model, then an LLM corrects terms using the slides as a glossary. Accuracy is measured on a real sample in the tools report. |

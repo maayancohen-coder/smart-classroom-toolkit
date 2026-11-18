@@ -43,6 +43,11 @@ This document explains how we check that the system does what the SRS requires. 
 | `DeviceBindingCheck` | Passes for an unknown phone with an unbound student. Passes for the correct pair. Fails for a phone bound to someone else. Fails for a student bound to another phone. | Unit |
 | `GeofenceCheck` | Inside the radius passes. Outside fails. Accuracy is taken into account (a poor-accuracy reading near the edge passes). Location denied fails. No location configured passes. Reading too imprecise fails. | Unit |
 | `LocationSpoofCheck` | Realistic jittery readings pass. Accuracy better than the plausible minimum fails. Three identical readings fail. No readings pass (left to the geofence). | Unit |
+| `FrozenLocationCheck`, `StaleLocationCheck` | Three identical readings are only a weak failure. Readings older than 60 s are only a weak failure. Fresh, jittery readings pass. | Unit |
+| `DuplicateCoordinatesCheck` | The same coordinates (6 decimals) as another student fail strongly; different students 5 m apart pass. | Unit |
+| `SharedFingerprintCheck`, `RapidRepeatCheck` | The same phone profile for a different student is a weak failure; the same profile, the same network and under 120 s apart is a second weak failure; two phones of the same model on different networks stay present. | Unit |
+| `PinStore` | The first PIN is accepted; the same PIN passes; a wrong PIN fails; five wrong PINs lock for 5 minutes, also for the right PIN; reset allows a new PIN. | Unit |
+| `ClassCluster` | Fewer than 6 accurate check-ins give no cluster; a student far from 7 students sitting together is outside; a student inside the group is not. | Unit |
 | `NetworkCheck` | An address inside the trusted network passes. Outside fails. No trusted network configured passes. | Unit |
 | `AttendanceEvaluator` | Decision table in section 5. | Unit |
 | `AttendanceService` | Full check-in with the real checks and a fake roster: present, suspect (each reason), duplicate check-in, unknown student, closed session, manual add after closing. | Integration |
@@ -54,7 +59,7 @@ This document explains how we check that the system does what the SRS requires. 
 |---|---|---|
 | `HeadCountComparer` | Gap equals check-ins minus counted people. A gap inside the 10% tolerance is not flagged. A gap above is flagged and returns the check-ins with the most failed checks. Counted people higher than check-ins gives a negative gap and no flag. Zero check-ins. | Unit |
 | `PeopleCounter` (with `FakePeopleCounter`) | The service calls the counter, deletes the photo, and keeps only the number. A counter failure leaves the session unchanged. | Integration |
-| `ModelPeopleCounter` | Accuracy on the class photos, see section 7. | AI quality |
+| `ModelPeopleCounter` | Not in the demo: the free vision service gave no stable result (tools report, 3.6). | AI quality |
 | `CsvExporter`, `XlsxExporter` | The file opens, has the header, one row per student, Hebrew text is intact, suspect rows show their reasons. | Unit |
 
 ### 4.3 Polls and comments
@@ -194,7 +199,8 @@ A dry run of the 10-minute demo is performed once the day before.
 |---|---|
 | FR-1 to FR-7 | `TokenService`, `AttendanceService` and scenario tests |
 | FR-8 to FR-19 | Check tests, evaluator decision table, scenarios |
-| FR-20 to FR-24 | `HeadCountComparer`, `PeopleCounter`, photo count measurement |
+| FR-9a, FR-9b, FR-11a, FR-12a | Scenario tests (PIN, location refusal, class group), `PinStore` and `ClassCluster` tests |
+| FR-20 to FR-24a | `HeadCountComparer`, `PeopleCounter` with a fake; the photo measurement was not done |
 | FR-25 to FR-28 | Exporter tests, manual add scenario |
 | FR-29 to FR-33 | `PollService`, `CommentService` |
 | FR-34 to FR-39 | `MediaService`, `JobRunner`, `AudioExtractor`, WER measurement |

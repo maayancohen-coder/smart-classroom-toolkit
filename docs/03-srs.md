@@ -20,7 +20,10 @@ A web application for lecturers and students with five tools: reliable attendanc
 | Token | A short-lived signed value encoded in the QR code |
 | Check-in | A student's attempt to mark attendance in a session |
 | Suspect | A check-in that failed at least one strong check, or two weak checks |
-| Gap | Number of check-ins minus the number of people counted in the class photo |
+| Gap | Number of check-ins minus the number of people counted in the room (typed by the lecturer, or counted from a class photo) |
+| PIN | A personal code of 4 to 6 digits that a student chooses on the first check-in and enters on every later one |
+| Phone profile | A hash of the phone model, screen, language and time zone; it is not a secret and not unique to a person |
+| Class group | The centre and spread of the locations of the check-ins in one session |
 | ASR | Automatic speech recognition (speech-to-text) |
 | LLM | Large language model |
 
@@ -133,7 +136,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | NFR-3 | Lecturer functions shall require authentication. A student shall not be able to call a lecturer function. |
 | NFR-4 | All traffic shall use HTTPS. |
 | NFR-5 | The device identifier shall be a random value stored in a cookie that is not readable by page scripts. |
-| NFR-6 | The system shall limit the rate of check-in attempts per client to slow down guessing and scripted abuse. |
+| NFR-6 | The system shall limit the rate of check-in attempts per client to slow down guessing and scripted abuse. In the demo only the PIN lock (FR-9b) is implemented; general rate limiting is future work. |
 
 ### 3.2 Privacy
 
@@ -201,8 +204,8 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 |---|---|
 | UC1, UC6 | FR-1 to FR-4 |
 | UC2 | FR-5 to FR-7 |
-| UC3 | FR-8 to FR-19 |
-| UC4 | FR-20 to FR-24 |
+| UC3 | FR-8 to FR-19, including FR-9a, FR-9b, FR-11a, FR-12a |
+| UC4 | FR-20 to FR-24a |
 | UC5, UC12 | FR-25 to FR-28 |
 | UC7 | FR-18 |
 | UC8 to UC11 | FR-29 to FR-33 |
