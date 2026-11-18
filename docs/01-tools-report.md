@@ -76,6 +76,16 @@ This report lists the tools we considered for the attendance tool, what we tried
 - **Result with the personal PIN:** every check-in needs the student's PIN (4-6 digits, stored as a salted hash, locked for 5 minutes after 5 wrong tries). Marking a friend who already has a PIN fails without it, in a private window too. This is covered by automated scenarios and was also confirmed by hand on the iPhone: a wrong PIN in a private window was rejected.
 - **Limits we accept:** the first person to enter a student's ID chooses the PIN (the lecturer can reset it); a student can give the PIN to a friend; two phones of the same model look alike, so the profile hash is only a weak signal.
 
+### 3.8 Homework review with an LLM (small experiment)
+
+- **Goal:** check what an LLM review of a real submission looks like, and what the homework service (UC14) must do before sending a file out.
+- **Test:** one real submission of ours (28-page PDF, Computer Networks assignment 1, Hebrew with English terms). The text was extracted with `pypdf`, joined per page, and reviewed by the LLM with a fixed prompt: list strengths, mistakes, missing parts and suggestions, and quote the page for every claim. Only one condition was run: the assignment text was not available, so the review judged the work on its own.
+- **Result, useful:** the review found concrete, checkable points. It recomputed the numbers in the work (the three filter percentages, the response time 19.951666 - 19.797716 = 0.153950 s, and 1368 + 325 = 1693 bytes) and all were correct. It also found real weaknesses: the client IP changes between captures (10.1.24.27, 10.9.1.164, 10.9.4.93) and the text does not say why; one answer (server-side processing as "better security") is weak, because the real reason is that server-side checks cannot be bypassed by the user; section 22 repeats section 20; and a leftover note to ourselves ("you can rely on the screenshots") remained inside the text of section 21.
+- **Result, limits:** four pages (6, 7, 19, 21) are screenshots with no text, so the review could not check any claim that depends on them. The extracted text came out one word per line and needed cleaning first. The review could not tell whether the work answers what the lecturer asked, because the assignment text was missing.
+- **Privacy finding (NFR-10):** the first page holds the authors' names and ID numbers. The service must remove names and 9-digit numbers before sending the text to an external model, and tell the student what is sent.
+- **Decision:** the homework service stays a design (FR-40 to FR-43). It is not built into the demo. The review is a suggestion; the lecturer or student decides.
+- **Not measured:** how often the review is wrong, and the comparison of several submissions (FR-42). We make no claim about them.
+
 ## 4. Tools not adopted, and why
 
 | Tool | Reason |

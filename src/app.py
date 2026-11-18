@@ -17,6 +17,8 @@ from attendance.service import AttendanceService, CheckInError
 from attendance.tokens import TokenService
 from attendance.slides import MAX_BYTES as MAX_SLIDES_BYTES, SlidesError, extract_terms, extract_text, hebrew_words
 from attendance.terms import DEFAULT_TERMS
+from attendance.handwriting import HandwritingError, build_transcriber
+from attendance.homework import HomeworkStore, build_report, content_check
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
 
 DEVICE_COOKIE = "did"
@@ -328,6 +330,157 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             abort(404)
         return Response(body, mimetype=mime,
                         headers={"Content-Disposition": f"attachment; filename=attendance_{stamp}.{fmt}"})
+
+    # ---- homework ----------------------------------------------------------------
+    homework = HomeworkStore()
+    app.extensions["homework_store"] = homework
+    app.extensions["transcriber"] = build_transcriber(config)   # tests replace it with a fake
+    MIN_TEXT_CHARS = 40
+    IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+
+    def read_upload(field: str) -> tuple[str, str]:
+        """Text of an uploaded file (or pasted text). Scans and photos go to the handwriting reader."""
+        upload = request.files.get(field)
+        if upload is None or not upload.filename:
+            return (request.form.get(field + "_text") or "").strip(), ""
+        data = upload.read(MAX_SLIDES_BYTES + 1)
+        if not data or len(data) > MAX_SLIDES_BYTES:
+            raise ValueError("הקובץ ריק או גדול מדי (עד 15MB)")
+        name = upload.filename.lower()
+        image_mime = next((m for ext, m in IMAGE_TYPES.items() if name.endswith(ext)), None)
+        text = ""
+        if image_mime is None:
+            try:
+                text = extract_text(upload.filename, data).strip()
+            except SlidesError as exc:
+                raise ValueError(str(exc)) from exc
+        if len(text) >= MIN_TEXT_CHARS:
+            return text, upload.filename
+        if image_mime is None and not name.endswith(".pdf"):
+            return text, upload.filename
+        transcriber = app.extensions["transcriber"]
+        if transcriber is None:
+            raise ValueError("הקובץ סרוק או בכתב יד ואין בו טקסט. כדי לקרוא אותו צריך להגדיר מפתח "
+                             "GEMINI_API_KEY או ANTHROPIC_API_KEY בשרת. אפשר גם להדביק את הטקסט ידנית.")
+        try:
+            text = transcriber.transcribe(data, image_mime or "application/pdf")
+        except HandwritingError as exc:
+            raise ValueError(str(exc)) from exc
+        if not text:
+            raise ValueError("לא הצלחתי לקרוא טקסט מהקובץ")
+        return text, upload.filename
+
+    def assignment_or_404(assignment_id: str):
+        assignment = homework.get(assignment_id)
+        if assignment is None:
+            abort(404)
+        return assignment
+
+    @app.get("/lecturer/homework")
+    def lecturer_homework():
+        require_lecturer()
+        return render_template("lecturer_homework.html", reader=app.extensions["transcriber"].name if app.extensions["transcriber"] else "")
+
+    @app.get("/api/homework/list")
+    def api_homework_list():
+        require_lecturer()
+        return jsonify([{"id": a.assignment_id, "course": a.course, "title": a.title,
+                         "submissions": len(a.submissions), "has_reference": bool(a.reference_text),
+                         "has_materials": bool(a.materials_text), "has_assignment": bool(a.assignment_text)}
+                        for a in homework.all()])
+
+    def save_files(assignment) -> None:
+        for field, attr in (("assignment", "assignment_text"), ("reference", "reference_text"),
+                            ("materials", "materials_text")):
+            text, _ = read_upload(field)
+            if text:
+                setattr(assignment, attr, text[:300_000])
+
+    @app.post("/api/homework")
+    def api_homework_create():
+        require_lecturer()
+        course, title = (request.form.get("course") or "").strip(), (request.form.get("title") or "").strip()
+        if not course or not title:
+            return jsonify(ok=False, error="חסר שם קורס או שם מטלה"), 400
+        assignment = homework.create(course, title)
+        try:
+            save_files(assignment)
+        except ValueError as exc:
+            return jsonify(ok=False, error=str(exc), id=assignment.assignment_id), 400
+        return jsonify(ok=True, id=assignment.assignment_id)
+
+    @app.post("/api/homework/<assignment_id>/files")
+    def api_homework_files(assignment_id):
+        require_lecturer()
+        assignment = assignment_or_404(assignment_id)
+        try:
+            save_files(assignment)
+        except ValueError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        return jsonify(ok=True)
+
+    @app.get("/api/homework/<assignment_id>/report")
+    def api_homework_report(assignment_id):
+        require_lecturer()
+        return jsonify(build_report(assignment_or_404(assignment_id)))
+
+    @app.get("/api/homework/<assignment_id>/submission/<student_id>")
+    def api_homework_submission(assignment_id, student_id):
+        require_lecturer()
+        submission = assignment_or_404(assignment_id).submissions.get(student_id)
+        if submission is None:
+            abort(404)
+        return jsonify(name=submission.name, filename=submission.filename, text=submission.text)
+
+    @app.get("/homework")
+    def student_homework():
+        return render_template("student_homework.html")
+
+    @app.get("/api/homework/courses")
+    def api_homework_courses():
+        return jsonify([{"course": course, "assignments": [{"id": a.assignment_id, "title": a.title,
+                                                            "has_materials": bool(a.materials_text)} for a in items]}
+                        for course, items in homework.courses().items()])
+
+    @app.post("/api/homework/<assignment_id>/check")
+    def api_homework_check(assignment_id):
+        """Self-check for a student before submitting: course content only, nothing is stored."""
+        assignment = assignment_or_404(assignment_id)
+        try:
+            text, _ = read_upload("file")
+        except ValueError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        if not text:
+            return jsonify(ok=False, error="לא התקבל טקסט"), 400
+        if not assignment.materials_text:
+            return jsonify(ok=False, error="המרצה עוד לא העלה חומר קורס לבדיקה"), 400
+        check = content_check(text, assignment.materials_text, assignment.assignment_text)
+        return jsonify(ok=True, text=text, coverage=check["coverage"], missing=check["missing"],
+                       outside=check["outside"], key_terms=check["key_terms"], used=check["used"])
+
+    @app.post("/api/homework/<assignment_id>/submit")
+    def api_homework_submit(assignment_id):
+        assignment = assignment_or_404(assignment_id)
+        student = service.roster.get((request.form.get("student_id") or "").strip())
+        if student is None:
+            return jsonify(ok=False, error="מספר הסטודנט לא נמצא ברשימת הקורס"), 400
+        if config.REQUIRE_PIN:
+            pin = (request.form.get("pin") or "").strip()
+            if not (pin.isdigit() and 4 <= len(pin) <= 6):
+                return jsonify(ok=False, error="יש להזין קוד אישי (PIN) של 4-6 ספרות"), 400
+            verdict = service.pins.check_or_set(student.student_id, pin)
+            if verdict == service.pins.LOCKED:
+                return jsonify(ok=False, error="יותר מדי ניסיונות. נסו שוב בעוד כמה דקות"), 429
+            if verdict == service.pins.WRONG:
+                return jsonify(ok=False, error="הקוד האישי שגוי"), 400
+        try:
+            text, filename = read_upload("file")
+        except ValueError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        if len(text) < 5:
+            return jsonify(ok=False, error="לא התקבל טקסט. צרפו קובץ או הדביקו את הפתרון"), 400
+        replaced = homework.submit(assignment, student.student_id, student.name, filename or "text", text)
+        return jsonify(ok=True, replaced=replaced, name=student.name, chars=len(text))
 
     return app
 

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}שיעורי בית{% endblock %}
+{% block head %}<style>
+  .page { max-width: 980px; margin: 0 auto; padding: 24px 16px; }
+  .card { margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: right; vertical-align: top; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .85rem; }
+  .bad { background: var(--bad-bg); color: var(--bad); } .ok { background: var(--ok-bg); color: var(--ok); }
+  .warn { background: var(--warn-bg); color: var(--warn); }
+  input[type=file] { font-size: .95rem; padding: 8px; }
+  select { width: 100%; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); }
+  pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 10px; direction: rtl; }
+  small, .muted { color: var(--muted); }
+  details { margin-top: 8px; }
+</style>{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="card">
+    <h1>שיעורי בית</h1>
+    <p class="muted">הגדרת מטלה לקורס: שאלות, פתרון המרצה וחומר הקורס. סטודנטים מגישים בכתובת <b>/homework</b>.
+      {% if reader %}קריאת כתב יד פעילה ({{ reader }}).{% else %}קריאת כתב יד כבויה: סריקות בלי טקסט יידחו עד שיוגדר מפתח.{% endif %}</p>
+    <label for="course">קורס</label>
+    <select id="course"></select>
+    <input id="courseNew" placeholder="שם הקורס" style="display:none">
+    <label for="title">שם המטלה</label>
+    <input id="title" placeholder="למשל: מטלה 3">
+    <label>קובץ השאלות (לא חובה, מוציא את נוסח השאלות מההשוואה)</label><input type="file" id="f_assignment">
+    <label>פתרון המרצה (לא חובה)</label><input type="file" id="f_reference">
+    <label>חומר הקורס (לא חובה, לבדיקה לפי תוכן הקורס)</label><input type="file" id="f_materials">
+    <button class="full" id="create">צור מטלה</button>
+    <p id="msg"></p>
+  </div>
+  <div class="card"><h1>המטלות שלי</h1><div id="list" class="muted">אין עדיין מטלות</div></div>
+  <div class="card" id="reportCard" style="display:none"></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const COURSES = ["Intro to Software Engineering","Algorithms 1","Computer Networks","Probability","System Programming 1","Linear Algebra"];
+const NEW = "__new__";
+$("course").innerHTML = COURSES.map(c => `<option>${esc(c)}</option>`).join("") + `<option value="${NEW}">➕ קורס אחר…</option>`;
+$("course").onchange = () => $("courseNew").style.display = $("course").value === NEW ? "" : "none";
+const courseName = () => $("course").value === NEW ? $("courseNew").value.trim() : $("course").value;
+function addFiles(fd, ids) {
+  for (const [field, id] of ids) { const f = $(id) && $(id).files[0]; if (f) fd.append(field, f); }
+}
+$("create").onclick = async () => {
+  const fd = new FormData(); fd.append("course", courseName()); fd.append("title", $("title").value);
+  addFiles(fd, [["assignment","f_assignment"],["reference","f_reference"],["materials","f_materials"]]);
+  $("create").disabled = true; $("msg").textContent = "שולח… (קובץ סרוק עלול לקחת עד דקה)";
+  const res = await fetch("/api/homework", { method: "POST", body: fd });
+  const data = await res.json(); $("create").disabled = false;
+  $("msg").textContent = data.ok ? "המטלה נוצרה" : (data.error || "שגיאה");
+  if (data.ok) { $("title").value = ""; for (const id of ["f_assignment","f_reference","f_materials"]) $(id).value = ""; }
+  load();
+};
+async function load() {
+  const items = await (await fetch("/api/homework/list")).json();
+  $("list").innerHTML = items.length ? items.map(a => `
+    <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <b>${esc(a.course)} · ${esc(a.title)}</b>
+      <span class="tag ${a.submissions ? "ok" : "warn"}">${a.submissions} הגשות</span>
+      <small>${a.has_assignment ? "שאלות ✓" : "שאלות ✗"} · ${a.has_reference ? "פתרון ✓" : "פתרון ✗"} · ${a.has_materials ? "חומר ✓" : "חומר ✗"}</small><br>
+      <button class="secondary" onclick="report('${a.id}')">דוח והשוואה</button>
+      <details><summary>הוספה או החלפה של קבצים</summary>
+        <label>שאלות</label><input type="file" id="a_${a.id}">
+        <label>פתרון המרצה</label><input type="file" id="r_${a.id}">
+        <label>חומר הקורס</label><input type="file" id="m_${a.id}">
+        <button class="secondary" style="margin-top:10px" onclick="upd('${a.id}')">שמור קבצים</button> <span id="u_${a.id}"></span>
+      </details></div>`).join("") : "אין עדיין מטלות";
+}
+async function upd(id) {
+  const fd = new FormData(); addFiles(fd, [["assignment","a_"+id],["reference","r_"+id],["materials","m_"+id]]);
+  $("u_"+id).textContent = "שולח…";
+  const data = await (await fetch(`/api/homework/${id}/files`, { method: "POST", body: fd })).json();
+  $("u_"+id).textContent = data.ok ? "נשמר" : (data.error || "שגיאה"); load();
+}
+async function report(id) {
+  const r = await (await fetch(`/api/homework/${id}/report`)).json();
+  const card = $("reportCard"); card.style.display = "";
+  const pct = v => v === null ? "<small>אין</small>" : v + "%";
+  card.innerHTML = `<h1>${esc(r.course)} · ${esc(r.title)} · ${r.count} הגשות</h1>
+    <p class="muted">הדוח הוא רמז לעין אנושית, לא ציון. דמיון = אחוז רצפים של שלוש מילים שמופיעים בשני הטקסטים
+      (נוסח השאלות לא נספר). הדגל מופיע מ-${r.threshold}%.
+      ${r.has_reference ? "" : "<br>לא הועלה פתרון מרצה, ולכן אין השוואה אליו."}
+      ${r.has_materials ? "" : "<br>לא הועלה חומר קורס, ולכן אין בדיקת תוכן."}</p>
+    ${r.pairs.length ? `<h3>זוגות דומים מאוד</h3><ul>${r.pairs.map(p => `<li>${esc(p.a)} ↔ ${esc(p.b)}: <span class="tag bad">${p.percent}%</span></li>`).join("")}</ul>` : "<p>לא נמצאו זוגות דומים מאוד.</p>"}
+    <table><tr><th>שם</th><th>דמיון לפתרון המרצה</th><th>מונחי קורס בשימוש</th><th>הכי דומה ל…</th><th>מונחים באנגלית מחוץ לקורס</th><th>מונחי קורס שחסרים</th><th></th></tr>
+    ${r.rows.map(x => `<tr><td>${esc(x.name)}<br><small>${esc(x.student_id)}</small></td><td>${pct(x.vs_reference)}</td><td>${pct(x.coverage)}</td>
+      <td>${x.closest_name ? `${esc(x.closest_name)} <span class="tag ${x.flagged ? "bad" : "ok"}">${x.closest_percent}%</span>` : "-"}</td>
+      <td>${esc(x.outside.join(", "))}</td><td>${esc(x.missing.join(", "))}</td>
+      <td><button class="secondary" onclick="view('${id}','${esc(x.student_id)}')">הטקסט</button></td></tr>`).join("")}</table>
+    <div id="viewer"></div>`;
+  card.scrollIntoView();
+}
+async function view(id, sid) {
+  const s = await (await fetch(`/api/homework/${id}/submission/${sid}`)).json();
+  $("viewer").innerHTML = `<h3>${esc(s.name)} · ${esc(s.filename)}</h3><pre>${esc(s.text)}</pre>`;
+}
+load();
+</script>
+{% endblock %}

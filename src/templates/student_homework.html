@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}הגשת מטלה{% endblock %}
+{% block head %}<style>
+  select { width: 100%; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); }
+  textarea { width: 100%; min-height: 110px; font-size: 1rem; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .res { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--bg); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+</style>{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <h1>הגשת מטלה</h1>
+  <p class="muted">ההגשה מושווית לפתרון המרצה ולהגשות של סטודנטים אחרים באותה מטלה. ניתן להגיש שוב, וההגשה האחרונה היא שנשמרת.</p>
+  <label for="course">קורס</label><select id="course"></select>
+  <label for="asg">מטלה</label><select id="asg"></select>
+  <label for="sid">מספר סטודנט</label><input id="sid" inputmode="numeric" autocomplete="off">
+  <label for="pin">קוד אישי (PIN)</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+  <label>קובץ הפתרון (PDF או תמונה, כתב יד מותר)</label><input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.pptx">
+  <label for="text">או הדביקו את הפתרון</label><textarea id="text"></textarea>
+  <button class="secondary full" id="check">בדיקה לפי חומר הקורס (לא נשמר)</button>
+  <button class="full" id="send">הגשה</button>
+  <div id="out"></div>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let data = [];
+async function init() {
+  data = await (await fetch("/api/homework/courses")).json();
+  $("course").innerHTML = data.length ? data.map((c, i) => `<option value="${i}">${esc(c.course)}</option>`).join("") : "<option>אין מטלות פתוחות</option>";
+  fill();
+}
+function fill() { const c = data[$("course").value]; $("asg").innerHTML = c ? c.assignments.map(a => `<option value="${a.id}">${esc(a.title)}</option>`).join("") : ""; }
+$("course").onchange = fill;
+function form() {
+  const fd = new FormData(); const f = $("file").files[0];
+  if (f) fd.append("file", f); else fd.append("file_text", $("text").value);
+  return fd;
+}
+async function post(url, fd, btn) {
+  $("out").innerHTML = '<div class="res">שולח… (קובץ סרוק או בכתב יד עלול לקחת עד דקה)</div>';
+  btn.disabled = true;
+  try { const res = await fetch(url, { method: "POST", body: fd }); return await res.json(); }
+  catch (e) { return { ok: false, error: "בעיית רשת" }; } finally { btn.disabled = false; }
+}
+$("check").onclick = async () => {
+  if (!$("asg").value) return;
+  const d = await post(`/api/homework/${$("asg").value}/check`, form(), $("check"));
+  if (!d.ok) { $("out").innerHTML = `<div class="res bad">${esc(d.error)}</div>`; return; }
+  $("out").innerHTML = `<div class="res"><b>שימוש במונחי הקורס: ${d.coverage}%</b> (${d.used} מתוך ${d.key_terms})<br>
+    ${d.missing.length ? "מונחים מהקורס שלא הופיעו: " + esc(d.missing.join(", ")) + "<br>" : ""}
+    ${d.outside.length ? "מונחים באנגלית שלא מופיעים בחומר הקורס: " + esc(d.outside.join(", ")) : "כל המונחים באנגלית מופיעים בחומר הקורס."}
+    <details><summary>הטקסט שנקרא מהקובץ</summary><pre style="white-space:pre-wrap">${esc(d.text)}</pre></details>
+    <p class="muted">זה רמז בלבד ולא ציון. הבדיקה לא נשמרת ולא נשלחת למרצה.</p></div>`;
+};
+$("send").onclick = async () => {
+  if (!$("asg").value) return;
+  const fd = form(); fd.append("student_id", $("sid").value); fd.append("pin", $("pin").value);
+  const d = await post(`/api/homework/${$("asg").value}/submit`, fd, $("send"));
+  $("out").innerHTML = d.ok ? `<div class="res ok">${esc(d.name)}, ההגשה נקלטה${d.replaced ? " (החליפה הגשה קודמת)" : ""}.</div>`
+                            : `<div class="res bad">${esc(d.error)}</div>`;
+};
+init();
+</script>
+{% endblock %}
