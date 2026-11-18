@@ -15,6 +15,7 @@ from attendance.report import to_csv, to_xlsx
 from attendance.repository import DeviceRegistry, Roster, SessionStore
 from attendance.service import AttendanceService, CheckInError
 from attendance.tokens import TokenService
+from attendance.slides import MAX_BYTES as MAX_SLIDES_BYTES, SlidesError, extract_terms, extract_text, hebrew_words
 from attendance.terms import DEFAULT_TERMS
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
 
@@ -247,7 +248,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
                 threshold = float(data.get("threshold"))
             except (TypeError, ValueError):
                 threshold = 0.0
-            assembled = assemble_lecturer_transcript(segments, threshold, terms)
+            assembled = assemble_lecturer_transcript(segments, threshold, terms, hebrew_words(session.slides_text))
             raw, dropped, questions = assembled.text, assembled.dropped, assembled.questions
         result = correct_transcript(raw, terms)
         session.transcript_raw, session.transcript_corrected = raw, result.text
@@ -255,6 +256,25 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         return jsonify(ok=True, raw=raw, corrected=result.text, questions=questions, dropped=dropped,
                        missing=[m for m in result.missing if m.lower() in glossary_text.lower()],
                        fixes=[{"heard": f.heard, "term": f.term} for f in result.fixes])
+
+    @app.post("/api/session/<session_id>/slides")
+    def api_slides(session_id):
+        """Read the text of the lecture slides; the file itself is not kept."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        upload = request.files.get("slides")
+        if upload is None:
+            return jsonify(ok=False, error="לא נבחר קובץ"), 400
+        data = upload.read(MAX_SLIDES_BYTES + 1)
+        if not data or len(data) > MAX_SLIDES_BYTES:
+            return jsonify(ok=False, error="הקובץ ריק או גדול מדי (עד 15MB)"), 400
+        try:
+            text = extract_text(upload.filename or "", data)
+        except SlidesError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        session.slides_name, session.slides_text = upload.filename or "", text[:300_000]
+        terms = extract_terms(text)
+        return jsonify(ok=True, name=session.slides_name, chars=len(text), terms=terms)
 
     @app.get("/api/session/<session_id>/transcript.txt")
     def api_transcript_download(session_id):

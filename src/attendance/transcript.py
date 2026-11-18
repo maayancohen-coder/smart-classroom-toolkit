@@ -199,7 +199,8 @@ def _looks_like_question(text: str) -> bool:
     return text.strip().endswith("?") or any(w.lstrip("והשלב") in QUESTION_WORDS or w in QUESTION_WORDS for w in first)
 
 
-def assemble_lecturer_transcript(segments: list[Segment], threshold: float, terms: list[str]) -> Assembled:
+def assemble_lecturer_transcript(segments: list[Segment], threshold: float, terms: list[str],
+                                 context_words: frozenset | set = frozenset()) -> Assembled:
     lines, dropped, questions = [], [], 0
     lowered_terms = [t.lower() for t in terms]
     for i, seg in enumerate(segments):
@@ -211,7 +212,8 @@ def assemble_lecturer_transcript(segments: list[Segment], threshold: float, term
             dropped.append({"text": seg.text, "reason": "quiet voice, not a question"})
         elif answer is None:
             dropped.append({"text": seg.text, "reason": "question that the lecturer did not answer"})
-        elif not (_words(seg.text) & _words(answer.text) or any(t in seg.text.lower() for t in lowered_terms)):
+        elif not (_words(seg.text) & _words(answer.text) or any(t in seg.text.lower() for t in lowered_terms)
+                  or _words(seg.text) & set(context_words)):
             dropped.append({"text": seg.text, "reason": "question not related to the lecturer's answer"})
         else:
             lines.append("[שאלה מהכיתה] " + seg.text)

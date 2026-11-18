@@ -107,6 +107,8 @@ class LectureSession:
     transcript_raw: str = ""        # what the speech recognition heard
     transcript_corrected: str = ""  # after the glossary correction
     transcript_glossary: str = ""
+    slides_name: str = ""
+    slides_text: str = ""           # text of the uploaded slides (the file itself is not kept)
 
     @property
     def has_geofence(self) -> bool:
