@@ -114,6 +114,9 @@ Each scenario uses a separate simulated phone.
 | Wrong PIN | Refused; after 5 wrong PINs even the right PIN is refused for 5 minutes | FR-9a, FR-9b |
 | Private window marking a friend, with the friend's wrong PIN | Refused | FR-9a |
 | Lecturer resets a student | The PIN can be chosen again | FR-18 |
+| Lecturer approves a suspect | PRESENT, reasons kept and marked "approved by lecturer"; the class-group check does not flag it again | FR-25a |
+| Lecturer undoes an approval | SUSPECT again | FR-25a |
+| Approving a student who did not check in, or approving as a non-lecturer | Refused | FR-25a, NFR-3 |
 | Exactly the same coordinates as another student | SUSPECT, reason "same coordinates" | FR-12 |
 | Cached (old) location reading | PRESENT with a note (weak signal only) | FR-12 |
 | Same phone profile as another student | SUSPECT together with another weak signal | FR-12 |
@@ -129,7 +132,7 @@ Each scenario uses a separate simulated phone.
 | Head count (typed) with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24, FR-24a |
 | Comment sent anonymously | No author in the lecturer view | FR-33 |
 
-49 automated tests (scenarios and head-count logic) are written and passing in the demo code.
+54 automated tests (scenarios and head-count logic) are written and passing in the demo code.
 
 ## 7. Non-functional and AI-quality tests
 

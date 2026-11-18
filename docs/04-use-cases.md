@@ -123,6 +123,8 @@ Status: draft v1
   1. Lecturer opens the sheet during or after the lecture.
   2. System shows every student in the roster with a status: present, suspect (with reasons) or absent.
   3. Lecturer exports it to Excel or CSV.
+- **Alternate flow:**
+  - 2a. Lecturer decides that a suspect student was really in the class and presses "approve". The student becomes present, the reasons stay in the notes marked "approved by lecturer", and the lecturer can undo it.
 
 ### UC6: Close a lecture session
 

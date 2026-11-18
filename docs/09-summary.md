@@ -11,7 +11,8 @@ A web-based attendance tool that works from the phone browser with nothing to in
 - a **personal PIN** per student, so a phone, a private window or another browser does not make it possible to mark someone else;
 - checks that explain themselves: every suspect check-in shows its reasons to the lecturer, and the student never sees the status;
 - a live lecturer page with the attendance sheet, a typed head count with the gap, and Excel/CSV export;
-- 49 automated tests, one simulated phone per scenario.
+- lecturer approval of a suspect check-in (the checks flag, the lecturer decides), with the reasons kept and the approval reversible;
+- 54 automated tests, one simulated phone per scenario.
 
 The other tools (polls, comments, transcript and summary, homework review) are covered by design documents.
 
@@ -33,6 +34,7 @@ The other tools (polls, comments, transcript and summary, homework review) are c
 - A student can give the PIN to a friend, and the first person to enter a student's ID chooses that student's PIN (the lecturer can reset it).
 - Two phones of the same model look alike, so the phone profile is only a weak signal.
 - Data is kept in memory; the free server sleeps and forgets it. The sheet must be exported before closing.
+- Adding a student manually after the lecture is closed (FR-28) is designed but not implemented in the demo.
 - General rate limiting (NFR-6) and a load test for 200 students (NFR-12) are not done.
 
 ## 5. Still to complete

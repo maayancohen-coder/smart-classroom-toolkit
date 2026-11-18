@@ -22,7 +22,7 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Phone identity | Random device cookie + personal PIN + browser profile hash | Biometrics / passkeys (WebAuthn), SMS codes, personal links by email | The user decided against biometrics. A PIN needs no extra service. Passkeys remain a possible future upgrade. |
 | Storage | In memory behind `Repository` classes | SQLite, PostgreSQL | KISS for the demo; the classes can be swapped for a database. |
 | Excel / CSV export | `openpyxl` and the standard `csv` module | Pandas | One small dependency. |
-| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 49 automated scenarios run in about one second, with one simulated phone per client. |
+| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 54 automated scenarios run in about one second, with one simulated phone per client. |
 | Hosting for the demo | Render (free web service, branch `demo-deploy`) | Local server, Cloudflare Tunnel, localhost.run, ngrok | See 3.4 and 3.5. |
 | People counting from a photo | Not adopted (adapter kept, manual count works) | Claude vision, Gemini vision | See 3.6. |
 

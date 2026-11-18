@@ -91,6 +91,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | FR-25 | The system shall show every student in the roster as present, suspect or absent, with check-in time and reasons. | M |
 | FR-26 | The system shall update the sheet while the session is open. | M |
 | FR-27 | The system shall export the sheet to Excel and CSV. | M |
+| FR-25a | The system shall let the lecturer approve a suspect check-in, which makes the student present while the reasons stay visible and the entry is marked "approved by lecturer", and shall let the lecturer undo the approval. Only the lecturer can do this. | M |
 | FR-28 | After a session is closed, only the lecturer shall be able to add a student to the attendance. The entry shall be marked as added manually. | M |
 
 ### 2.6 Comments and polls (UC8 to UC11)
