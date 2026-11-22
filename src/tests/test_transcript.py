@@ -132,3 +132,31 @@ def test_route_uses_segments_threshold_and_default_terms(env):
 
 def test_a_word_before_the_term_is_not_swallowed():
     assert fix("ההבדל הוא שהאדפטר מתאים ממשק") == "ההבדל הוא ש-Adapter מתאים ממשק"
+
+
+def test_a_term_is_not_matched_to_many_more_words_than_it_has():
+    from attendance.transcript import correct_transcript
+    result = correct_transcript("ההסתברות שהם K-הנה כל", ["inclusive"])
+    assert "inclusive" not in result.text
+
+
+def test_terms_from_slides_skip_pieces_of_sentences():
+    from attendance.slides import extract_terms
+    terms = extract_terms("Let X be the number of balls. The ball came up heads. Unit Test and Design Pattern.")
+    assert "Unit Test" in terms and "Design Pattern" in terms
+    assert not any(t in terms for t in ("Let X be", "came up heads", "ball came up heads"))
+
+
+def test_the_lecturer_can_reject_a_term_and_it_is_no_longer_used():
+    import os, sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from app import create_app
+    from test_flow import TestConfig
+    app = create_app(TestConfig)
+    lecturer = app.test_client()
+    lecturer.get("/lecturer?key=test-key")
+    sid = lecturer.post("/api/session", json={"course": "T"}).get_json()["session_id"]
+    body = {"raw": "היום נדבר על סטרטגי", "glossary": "Strategy", "defaults": False}
+    assert lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()["fixes"]
+    body["exclude"] = ["strategy"]
+    assert lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()["fixes"] == []

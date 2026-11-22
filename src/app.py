@@ -496,6 +496,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         terms = parse_glossary(glossary_text)
         if data.get("defaults", True):
             terms = terms + [t for t in DEFAULT_TERMS if t.lower() not in {x.lower() for x in terms}]
+        excluded = {str(x).lower() for x in (data.get("exclude") or [])[:200]}
+        terms = [t for t in terms if t.lower() not in excluded]            # terms the lecturer rejected
         raw = str(data.get("raw") or "")[:200_000]
         dropped, questions = [], 0
         segments = []

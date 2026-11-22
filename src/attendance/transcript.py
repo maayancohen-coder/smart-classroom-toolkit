@@ -140,7 +140,9 @@ def correct_transcript(raw: str, glossary: list[str]) -> Correction:
     while i < len(tokens):
         best = None   # (score, size, term, prefix)
         for term in terms:
-            for size in range(1, min(MAX_WINDOW, len(tokens) - i) + 1):
+            acronym = term.isupper() and 2 <= len(term) <= 5
+            widest = len(term) if acronym else len(term.split()) + 1       # a term is not spread over many more words than it has
+            for size in range(1, min(max(MAX_WINDOW, widest) if acronym else widest, len(tokens) - i) + 1):
                 score, prefix = _score(parts, i, size, term, skeletons)
                 if score < MIN_RATIO:
                     continue

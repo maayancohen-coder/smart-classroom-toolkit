@@ -83,8 +83,8 @@ def extract_terms(text: str, limit: int = 150) -> list[str]:
         if not words:
             continue
         phrase = " ".join(words)
-        if len(words) > 1 and len(phrase) >= 5:
-            add(phrase)
+        if len(words) > 1 and len(phrase) >= 5 and all(w[0].isupper() or w[0].isdigit() for w in words):
+            add(phrase)            # a name or a title ("Unit Test"), not a piece of a sentence ("came up heads")
         for w in words:
             if len(w) >= 4 or (w.isupper() and len(w) >= 2):
                 add(w)
