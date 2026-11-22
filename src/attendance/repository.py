@@ -4,6 +4,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
+import json
+import os
 import secrets
 import threading
 import time
@@ -69,12 +71,43 @@ class PinStore:
     """
     SET, OK, WRONG, LOCKED = "set", "ok", "wrong", "locked"
 
-    def __init__(self, max_attempts: int = 5, lock_seconds: float = 300):
+    def __init__(self, max_attempts: int = 5, lock_seconds: float = 300, path: str = "", keep_plain: bool = False):
         self._hashes: dict[str, tuple[bytes, bytes]] = {}
+        self._plain: dict[str, str] = {}     # demo/testing only: lets the lecturer see what was chosen
+        self.path, self.keep_plain = path, keep_plain
+        self._load()
         self._failures: dict[str, tuple[int, float]] = {}   # student -> (count, locked_until)
         self.max_attempts = max_attempts
         self.lock_seconds = lock_seconds
         self._lock = threading.Lock()
+
+    def _load(self) -> None:
+        if not self.path or not os.path.exists(self.path):
+            return
+        try:
+            with open(self.path, encoding="utf-8") as handle:
+                for key, item in json.load(handle).items():
+                    self._hashes[key] = (bytes.fromhex(item["salt"]), bytes.fromhex(item["hash"]))
+                    if item.get("plain"):
+                        self._plain[key] = item["plain"]
+        except (OSError, ValueError, KeyError):
+            pass    # a damaged file must not stop the server; passwords are simply chosen again
+
+    def _save(self) -> None:
+        if not self.path:
+            return
+        data = {k: {"salt": s.hex(), "hash": h.hex(), **({"plain": self._plain[k]} if k in self._plain else {})}
+                for k, (s, h) in self._hashes.items()}
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+            with open(self.path, "w", encoding="utf-8") as handle:
+                json.dump(data, handle)
+        except OSError:
+            pass
+
+    def chosen(self, key: str) -> Optional[str]:
+        """The password as chosen (only when keep_plain is on)."""
+        return self._plain.get(key) if self.keep_plain else None
 
     @staticmethod
     def _hash(pin: str, salt: bytes) -> bytes:
@@ -89,6 +122,9 @@ class PinStore:
             if stored is None:
                 salt = secrets.token_bytes(16)
                 self._hashes[student_id] = (salt, self._hash(pin, salt))
+                if self.keep_plain:
+                    self._plain[student_id] = pin
+                self._save()
                 return self.SET
             if hmac.compare_digest(stored[1], self._hash(pin, stored[0])):
                 self._failures.pop(student_id, None)
@@ -104,7 +140,9 @@ class PinStore:
     def reset(self, student_id: str) -> None:
         with self._lock:
             self._hashes.pop(student_id, None)
+            self._plain.pop(student_id, None)
             self._failures.pop(student_id, None)
+            self._save()
 
 
 class SessionStore:

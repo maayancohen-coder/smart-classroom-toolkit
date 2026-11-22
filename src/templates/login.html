@@ -24,6 +24,8 @@
     <label for="lid">Lecturer</label>
     <select id="lid">{% for l in lecturers %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select>
     <label for="key">Lecturer key</label><input id="key" type="password" autocomplete="off">
+    <label for="lpw">Personal password</label><input id="lpw" type="password" autocomplete="off">
+    <p class="muted" style="font-size:.9rem">The password you enter the first time becomes your personal password and cannot be changed.</p>
   </div>
   <button class="full" id="go">Sign in</button>
   <p id="msg"></p>
@@ -40,7 +42,7 @@ if (location.hash === "#lecturer") pick("lecturer");
 $("go").onclick = async () => {
   $("go").disabled = true; $("msg").textContent = "";
   const body = role === "student" ? { student_id: $("sid").value, pin: $("pin") ? $("pin").value : "" }
-                                  : { lecturer_id: $("lid").value, key: $("key").value };
+                                  : { lecturer_id: $("lid").value, key: $("key").value, password: $("lpw").value };
   const res = await fetch("/api/login/" + role, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (data.ok) location.href = data.url; else { $("msg").textContent = data.error || "Error"; $("go").disabled = false; }

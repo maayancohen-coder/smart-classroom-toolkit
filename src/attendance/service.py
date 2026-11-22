@@ -40,7 +40,7 @@ class AttendanceService:
         self.store = store
         self.tokens = tokens
         self.counter = counter
-        self.pins = PinStore(config.PIN_MAX_ATTEMPTS, config.PIN_LOCK_SECONDS)
+        self.pins = PinStore(config.PIN_MAX_ATTEMPTS, config.PIN_LOCK_SECONDS, config.PASSWORDS_PATH, config.SHOW_PASSWORDS)
         self.evaluator = AttendanceEvaluator([
             TokenFreshnessCheck(config.MAX_TOKEN_AGE_SECONDS),
             DeviceBindingCheck(registry),

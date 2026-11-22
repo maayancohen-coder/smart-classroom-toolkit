@@ -19,6 +19,7 @@ SAMPLE_REAL = [  # jittery, imprecise: what a real indoor fix looks like
 
 class TestConfig(Config):
     LECTURER_KEY = "test-key"
+    REQUIRE_LECTURER_PASSWORD = False
     REQUIRE_PIN = False             # the PIN and location-blocking scenarios use StrictConfig below
     BLOCK_WITHOUT_LOCATION = False
 

@@ -4,6 +4,7 @@
 <div class="wrap"><div class="card">
   <h1>Open a lecture</h1>
   <p class="muted">One click, and the system does the rest.</p>
+  <p><a class="btn secondary" href="/lecturer/passwords.csv">Download passwords (CSV)</a></p>
   <p>{% for c in courses %}<a class="btn secondary" style="margin:0 0 6px 6px" href="/lecturer/course/{{ c.id }}">{{ c.name }}</a>{% endfor %}</p>
 
   <label for="course">Course</label>

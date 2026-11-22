@@ -1,5 +1,7 @@
 """Flask web layer: routes only. All logic lives in the attendance package."""
+import csv
 import hmac
+import io
 import secrets
 import sys
 import time
@@ -158,11 +160,37 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         lecturer = catalog.lecturer(str(data.get("lecturer_id") or ""))
         if lecturer is None or not hmac.compare_digest(str(data.get("key") or "").strip(), config.LECTURER_KEY):
             return jsonify(ok=False, error="Wrong login details"), 400
+        if config.REQUIRE_LECTURER_PASSWORD:
+            password = str(data.get("password") or "")
+            if not 4 <= len(password) <= 64:
+                return jsonify(ok=False, error="Enter your personal password (4-64 characters)"), 400
+            verdict = service.pins.check_or_set("lecturer:" + lecturer.lecturer_id, password)
+            if verdict == service.pins.LOCKED:
+                return jsonify(ok=False, error="Too many attempts. Try again in a few minutes"), 429
+            if verdict == service.pins.WRONG:
+                return jsonify(ok=False, error="Wrong login details"), 400
         login.clear()
         login["lecturer_id"] = lecturer.lecturer_id
         login.permanent = True
         response = jsonify(ok=True, url="/lecturer")
         response.set_cookie(LECTURER_COOKIE, config.LECTURER_KEY, httponly=True, samesite="Lax", secure=request.is_secure)
+        return response
+
+    @app.get("/lecturer/passwords.csv")
+    def lecturer_passwords():
+        """Lecturer only, for testing: who has chosen a password and what it is (when SHOW_PASSWORDS is on)."""
+        require_lecturer()
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(["role", "id", "name", "password_set", "password"])
+        for lec in catalog.lecturers():
+            key = "lecturer:" + lec.lecturer_id
+            writer.writerow(["lecturer", lec.lecturer_id, lec.name, service.pins.has_pin(key), service.pins.chosen(key) or ""])
+        for st in service.roster.all():
+            writer.writerow(["student", st.student_id, st.name, service.pins.has_pin(st.student_id), service.pins.chosen(st.student_id) or ""])
+        response = make_response("\ufeff" + out.getvalue())
+        response.headers["Content-Type"] = "text/csv; charset=utf-8"
+        response.headers["Content-Disposition"] = "attachment; filename=passwords.csv"
         return response
 
     @app.get("/logout")
