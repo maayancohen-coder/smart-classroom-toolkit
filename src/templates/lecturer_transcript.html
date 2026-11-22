@@ -88,7 +88,8 @@
     <p class="muted" style="font-size:.9rem">Check the summary before you publish it. Publish it from the course page (Publish to students).</p>
     <div class="row">
       <a class="btn secondary" id="dl" href="/api/session/{{ session.session_id }}/transcript.txt">Download as a file</a>
-      <a class="btn secondary" href="/lecturer/{{ session.session_id }}">Back to the lecture</a>
+      {% if session.course_id %}<a class="btn secondary" href="/lecturer/course/{{ session.course_id }}">Back to the course</a>{% endif %}
+      {% if not session.closed %}<a class="btn secondary" href="/lecturer/{{ session.session_id }}">Back to the lecture</a>{% endif %}
     </div>
   </div>
 </div></div>

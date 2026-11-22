@@ -136,3 +136,19 @@ def test_student_sees_own_submission_on_the_course_page():
     assert "View my submission" in page and "my answer about strategy objects" in page
     other = student_client(app, "100000002").get("/course/i2se").get_data(as_text=True)
     assert "my answer about strategy objects" not in other
+
+
+def test_past_lecture_can_get_a_transcript_and_students_see_it_when_published():
+    app, lecturer = setup()
+    assert lecturer.post("/api/course/i2se/past-lecture", json={"date": "bad"}).status_code == 400
+    assert lecturer.post("/api/course/i2se/past-lecture", json={"date": "2999-01-01"}).status_code == 400
+    sid = lecturer.post("/api/course/i2se/past-lecture", json={"date": "2026-11-10"}).get_json()["session_id"]
+    assert lecturer.get(f"/lecturer/{sid}/transcript").status_code == 200
+    lecturer.post(f"/api/session/{sid}/transcript", json={"raw": TRANSCRIPT, "glossary": "Strategy", "defaults": False})
+    lec = lecturer.get("/api/course/i2se/lectures").get_json()
+    assert lec[0]["id"] == sid and lec[0]["closed"] and lec[0]["has_transcript"]
+    student = student_client(app)
+    assert student.get("/api/course/i2se/summaries").get_json() == []
+    lecturer.post(f"/api/session/{sid}/summary/publish", json={"published": True})
+    got = student.get("/api/course/i2se/summaries").get_json()
+    assert len(got) == 1 and "Strategy" in got[0]["transcript"]

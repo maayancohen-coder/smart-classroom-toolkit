@@ -1,5 +1,6 @@
 """Flask web layer: routes only. All logic lives in the attendance package."""
 import csv
+import datetime
 import hmac
 import io
 import secrets
@@ -252,7 +253,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         for x in sessions_of(course):
             if x.summary_published and x.transcript_corrected:
                 terms = [t.strip() for t in x.transcript_glossary.replace(",", "\n").splitlines() if t.strip()]
-                out.append({"started_at": x.started_at, "ai_text": x.summary_ai, **summarize(x.transcript_corrected, terms)})
+                out.append({"started_at": x.started_at, "ai_text": x.summary_ai, "transcript": x.transcript_corrected, **summarize(x.transcript_corrected, terms)})
         return jsonify(out)
 
     @app.post("/api/course/<course_id>/message")
@@ -317,7 +318,23 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         course = course_or_404(course_id)
         return jsonify([{"id": x.session_id, "started_at": x.started_at, "closed": x.closed,
                          "present": len(x.checkins), "has_transcript": bool(x.transcript_corrected),
-                         "published": x.summary_published} for x in sessions_of(course)])
+                         "published": x.summary_published} for x in sorted(sessions_of(course), key=lambda y: y.started_at, reverse=True)])
+
+    @app.post("/api/course/<course_id>/past-lecture")
+    def api_past_lecture(course_id):
+        """Lecturer: add a lecture that already took place (no attendance), to upload its recording and transcribe it."""
+        require_lecturer()
+        course = course_or_404(course_id)
+        raw = str((request.get_json(silent=True) or {}).get("date") or "")
+        try:
+            day = datetime.datetime.strptime(raw, "%Y-%m-%d").replace(hour=12)
+        except ValueError:
+            return jsonify(ok=False, error="Choose the date of the lecture"), 400
+        if day > datetime.datetime.now() + datetime.timedelta(days=1):
+            return jsonify(ok=False, error="The date is in the future"), 400
+        session = service.open_session(course.name, "", None, None, None)
+        session.course_id, session.closed, session.started_at = course.course_id, True, day.timestamp()
+        return jsonify(ok=True, session_id=session.session_id, url=url_for("lecturer_transcript", session_id=session.session_id))
 
     @app.get("/api/session/<session_id>/notes")
     def api_session_notes(session_id):

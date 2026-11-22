@@ -10,7 +10,10 @@
   <div class="card"><p><a href="/lecturer">← Lecturer area</a></p><h1>{{ course.name }}</h1>
     <a class="btn secondary" href="/lecturer/homework">Homework</a></div>
   <div class="card"><h2>Messages from students</h2><div id="inbox" class="muted">Loading…</div></div>
-  <div class="card"><h2>Lectures</h2><div id="lectures" class="muted">Loading…</div><div id="sum"></div></div>
+  <div class="card"><h2>Lectures</h2><div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <label style="font-weight:400">Add a lecture that already took place: <input type="date" id="pastDate" style="width:auto"></label>
+      <button class="secondary" id="pastBtn">Add and upload its recording</button> <small id="pastOut"></small></div>
+    <div id="lectures" class="muted">Loading…</div><div id="sum"></div></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -23,8 +26,9 @@ async function inbox() {
 async function lectures() {
   const items = await (await fetch(`/api/course/${cid}/lectures`)).json();
   $("lectures").innerHTML = items.length ? items.map(l => `<div class="item">${new Date(l.started_at*1000).toLocaleString("en-GB")}
-    · ${l.present} present · ${l.closed ? "Ended" : "<b>Active</b>"}
-    <a href="/lecturer/${l.id}">Lecture screen</a>
+    · ${l.present ? l.present + " present" : "no attendance"} · ${l.closed ? "Ended" : "<b>Active</b>"}
+    ${l.closed ? "" : `<a href="/lecturer/${l.id}">Lecture screen</a>`}
+    <a href="/lecturer/${l.id}/transcript">Recording &amp; transcript</a>
     ${l.has_transcript ? `<button class="secondary" onclick="show('${l.id}')">Summary</button>
       <button class="secondary" onclick="pub('${l.id}', ${!l.published})">${l.published ? "Hide from students" : "Publish to students"}</button>` : "<small>No transcript</small>"}</div>`).join("") : "No lectures have been opened in this course yet.";
 }
@@ -38,6 +42,10 @@ async function pub(id, value) {
   await fetch(`/api/session/${id}/summary/publish`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ published: value }) });
   lectures();
 }
+$("pastBtn").onclick = async () => {
+  const r = await fetch(`/api/course/${cid}/past-lecture`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ date: $("pastDate").value }) });
+  const d = await r.json(); if (d.ok) location.href = d.url; else $("pastOut").textContent = d.error || "Error";
+};
 inbox(); lectures(); setInterval(inbox, 10000);
 </script>
 {% endblock %}
