@@ -6,7 +6,7 @@ import secrets
 import sys
 import time
 
-from flask import (Flask, Response, abort, jsonify, make_response, redirect, render_template,
+from flask import (Flask, Response, abort, g, jsonify, make_response, redirect, render_template,
                    request, session as login, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -239,6 +239,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             mine = a.submissions.get(student.student_id)
             assignments.append({"id": a.assignment_id, "title": a.title, "submitted": mine is not None,
                                 "filename": mine.filename if mine else "", "text": mine.text if mine else "",
+                                "has_file": bool(mine and mine.original),
                                 "at": int(mine.submitted_at * 1000) if mine else 0})
         return render_template("student_course.html", student=student, course=course, live=live, assignments=assignments)
 
@@ -602,6 +603,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         if not data or len(data) > MAX_SLIDES_BYTES:
             raise ValueError("The file is empty or too large (up to 15MB)")
         name = upload.filename.lower()
+        g.raw_upload = (data, "application/pdf" if name.endswith(".pdf") else next(
+            (m for ext, m in IMAGE_TYPES.items() if name.endswith(ext)), "text/plain; charset=utf-8" if name.endswith((".txt", ".md")) else ""))
         image_mime = next((m for ext, m in IMAGE_TYPES.items() if name.endswith(ext)), None)
         text = ""
         if image_mime is None:
@@ -686,7 +689,34 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         submission = assignment_or_404(assignment_id).submissions.get(student_id)
         if submission is None:
             abort(404)
-        return jsonify(name=submission.name, filename=submission.filename, text=submission.text)
+        return jsonify(name=submission.name, filename=submission.filename, text=submission.text,
+                       has_file=bool(submission.original))
+
+    def file_response(submission):
+        if not submission.original or not submission.mime:
+            abort(404)
+        safe = "".join(c for c in submission.filename if c.isalnum() or c in "._- ") or "submission"
+        inline = submission.mime == "application/pdf" or submission.mime.startswith("image/")
+        response = Response(submission.original, mimetype=submission.mime)
+        response.headers["Content-Disposition"] = f'{"inline" if inline else "attachment"}; filename="{safe}"'
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @app.get("/api/homework/<assignment_id>/submission/<student_id>/file")
+    def api_homework_submission_file(assignment_id, student_id):
+        require_lecturer()
+        submission = assignment_or_404(assignment_id).submissions.get(student_id)
+        if submission is None:
+            abort(404)
+        return file_response(submission)
+
+    @app.get("/api/homework/<assignment_id>/my-file")
+    def api_homework_my_file(assignment_id):
+        student = require_student()
+        submission = assignment_or_404(assignment_id).submissions.get(student.student_id)
+        if submission is None:
+            abort(404)
+        return file_response(submission)
 
     llm_last: dict[str, float] = {}
 
@@ -818,7 +848,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             if len(text) < 5:
                 problems.append(f"{upload.filename}: no text found")
                 continue
-            homework.submit(assignment, student.student_id, student.name, filename, text)
+            raw, raw_mime = g.pop("raw_upload", (b"", ""))
+            homework.submit(assignment, student.student_id, student.name, filename, text, raw, raw_mime)
             saved += 1
         return jsonify(ok=saved > 0, saved=saved, problems=problems)
 
@@ -877,7 +908,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return jsonify(ok=False, error=str(exc)), 400
         if len(text) < 5:
             return jsonify(ok=False, error="No text received. Attach a file or paste the solution"), 400
-        replaced = homework.submit(assignment, student.student_id, student.name, filename or "text", text)
+        raw, raw_mime = g.pop("raw_upload", (b"", ""))
+        replaced = homework.submit(assignment, student.student_id, student.name, filename or "text", text, raw, raw_mime)
         return jsonify(ok=True, replaced=replaced, name=student.name, chars=len(text))
 
     return app

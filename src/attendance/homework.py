@@ -105,6 +105,8 @@ class Submission:
     filename: str
     text: str
     submitted_at: float
+    original: bytes = b""      # the uploaded file itself, so it can be opened again (kept in memory like everything else)
+    mime: str = ""
 
 
 @dataclass
@@ -143,11 +145,12 @@ class HomeworkStore:
             grouped.setdefault(a.course, []).append(a)
         return grouped
 
-    def submit(self, assignment: Assignment, student_id: str, name: str, filename: str, text: str) -> bool:
+    def submit(self, assignment: Assignment, student_id: str, name: str, filename: str, text: str,
+               original: bytes = b"", mime: str = "") -> bool:
         """Returns True if this replaced an earlier submission of the same student."""
         with self._lock:
             replaced = student_id in assignment.submissions
-            assignment.submissions[student_id] = Submission(student_id, name, filename, text[:MAX_TEXT], time.time())
+            assignment.submissions[student_id] = Submission(student_id, name, filename, text[:MAX_TEXT], time.time(), original, mime)
         return replaced
 
 

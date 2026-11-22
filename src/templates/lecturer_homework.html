@@ -130,7 +130,7 @@ async function report(id) {
 }
 async function view(id, sid) {
   const s = await (await fetch(`/api/homework/${id}/submission/${sid}`)).json();
-  $("viewer").innerHTML = `<h3>${esc(s.name)} · ${esc(s.filename)}</h3><pre>${esc(s.text)}</pre>`;
+  $("viewer").innerHTML = `<h3>${esc(s.name)} · ${esc(s.filename)}</h3>${s.has_file ? `<p><a href="/api/homework/${id}/submission/${sid}/file" target="_blank">Open the uploaded file</a></p>` : ""}<pre>${esc(s.text)}</pre>`;
 }
 function llm(id, sid, name) {
   $("viewer").innerHTML = `<h3>AI review · ${esc(name)}</h3>

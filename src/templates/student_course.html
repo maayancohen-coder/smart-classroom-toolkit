@@ -19,7 +19,8 @@
   <div class="sec"><h3>Homework</h3>
     {% for a in assignments %}<div style="margin-bottom:12px"><a href="/homework?assignment={{ a.id }}">{{ a.title }}</a>
       {% if a.submitted %}<span class="muted"> · Submitted <span class="when" data-ts="{{ a.at }}"></span>{% if a.filename %} ({{ a.filename }}){% endif %}</span>
-      <details><summary>View my submission</summary><pre style="white-space:pre-wrap;unicode-bidi:plaintext">{{ a.text }}</pre>
+      <details><summary>View my submission</summary>
+      {% if a.has_file %}<p><a href="/api/homework/{{ a.id }}/my-file" target="_blank">Open the file I uploaded</a></p>{% endif %}<pre style="white-space:pre-wrap;unicode-bidi:plaintext">{{ a.text }}</pre>
       <a href="/homework?assignment={{ a.id }}">Submit again to replace it</a></details>
       {% else %}<span class="muted"> · Not submitted yet</span>{% endif %}</div>
     {% else %}<p class="muted">No open assignments.</p>{% endfor %}</div>

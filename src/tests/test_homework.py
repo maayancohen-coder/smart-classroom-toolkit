@@ -360,3 +360,22 @@ def test_reviews_are_requested_in_hebrew():
     prompts = app.extensions["transcriber"].prompts
     assert "in Hebrew" in prompts[0] and "חוזקות" in prompts[0] and "השוואה לכיתה" in prompts[0]
     assert "in Hebrew" in prompts[1] and "טעויות נפוצות" in prompts[1]
+
+
+def test_uploaded_file_can_be_opened_again_by_its_owner_and_the_lecturer():
+    app, lecturer = lecturer_client()
+    aid = make_assignment(lecturer)
+    mine = app.test_client()
+    res = mine.post(f"/api/homework/{aid}/submit", data={"student_id": "100000001", "pin": "",
+                    "file": (io.BytesIO(b"determinant by expansion equals twenty one " * 3), "answer.txt")},
+                    content_type="multipart/form-data").get_json()
+    assert res["ok"]
+    login = mine.post("/api/login/student", json={"student_id": "100000001"})
+    assert login.get_json()["ok"]
+    got = mine.get(f"/api/homework/{aid}/my-file")
+    assert got.status_code == 200 and b"determinant" in got.data and got.headers["X-Content-Type-Options"] == "nosniff"
+    assert lecturer.get(f"/api/homework/{aid}/submission/100000001/file").status_code == 200
+    other = app.test_client()
+    other.post("/api/login/student", json={"student_id": "100000002"})
+    assert other.get(f"/api/homework/{aid}/my-file").status_code == 404
+    assert app.test_client().get(f"/api/homework/{aid}/submission/100000001/file").status_code == 403
