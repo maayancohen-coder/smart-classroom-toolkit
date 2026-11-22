@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Status: v2 (128 automated tests)
+Status: v2 (133 automated tests)
 
 This document explains how we check that the system does what the SRS requires. It is organized around the classes in document 06, because each class is tested on its own and then together with the others.
 
@@ -90,7 +90,7 @@ This document explains how we check that the system does what the SRS requires. 
 | Homework review | The prompt contains the assignment, the materials or the lecturer's solution; names and ID numbers are removed; the submitted text is inside data markers; the answer is requested in Hebrew; classmates are anonymous | Unit with a fake reader |
 | Student feedback | Needs at least 3 other submissions for a class comparison, respects the lecturer's switch, never quotes classmates, at most one request per 30 seconds | Integration through the routes |
 | Common mistakes | Needs two submissions, lecturer only, answers are numbered and anonymous | Integration |
-| Recording | Audio parts are accepted from the lecturer only, errors reach the page, nothing is stored but the text | Integration |
+| Recording | Audio parts are accepted from the lecturer only, errors reach the page, a recording is kept only if the lecturer chooses, and students can play it only after publishing | Integration |
 | Transcript repair and summary | Prompts contain the glossary and the data markers; only the lecturer can call them; the summary needs a transcript | Integration |
 | Browser flow of a recording | A 13-minute video was loaded in Chromium, cut into three parts and transcribed with a fake service | Manual, scripted once |
 
@@ -146,15 +146,15 @@ Each scenario uses a separate simulated phone.
 | Head count (typed) with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24, FR-24a |
 | Comment sent anonymously | No author in the lecturer view | FR-33 |
 
-128 automated tests are written and passing in the demo code:
+133 automated tests are written and passing in the demo code:
 
 | File | Tests | Covers |
 |---|---|---|
 | `test_flow.py` | 35 | Attendance scenarios through the web routes (rotating code, location, PIN, device checks, evaluator, export, lecturer functions) |
 | `test_headcount.py` | 19 | Head count, gap and tolerance logic |
 | `test_slides.py` | 9 | Text and terms from slides (PPTX, PDF, text) and refusal of bad files |
-| `test_transcript.py` | 17 | Glossary correction, lecturer-voice filter, student questions, download |
-| `test_portal.py` | 10 | Sign-in, course lists, live notes, messages, published summaries, the student's own submission on the course page |
+| `test_transcript.py` | 20 | Glossary correction and its limits, undoing a correction, lecturer-voice filter, student questions, download |
+| `test_portal.py` | 12 | Sign-in, course lists, live notes, messages, published summaries, the student's own submission, a past lecture with a transcript, the recording played only after publishing |
 | `test_homework.py` | 26 | Assignments, submissions, report, similarity, course-content check, scans through the reader, AI review, redaction, retry and quota handling, student feedback and class comparison, common mistakes, bulk import, opening the uploaded file, AI status, Hebrew prompts |
 | `test_passwords.py` | 5 | PIN and password chosen once, lecturer download, persistence in a file, hiding the values |
 | `test_recording.py` | 7 | Audio parts, errors, text repair, AI summary, saving, lecturer-only access |

@@ -156,14 +156,16 @@ Status: v2 (updated for the implemented demo)
   1. Lecturer opens the transcript page of the lecture and uploads the slides (optional) and the recording (video or audio).
   2. The browser extracts the sound from the file on the lecturer's computer and cuts it into parts of about 6 minutes.
   3. The system sends each part to the speech service (Gemini) and receives its text; the page shows "part N of M".
-  4. The system joins the text and corrects technical terms using the slides' glossary (locally).
-  5. The system produces an extractive summary. The lecturer reads and edits the transcript and the summary and can download them.
-  6. The lecturer publishes the summary to the students of the course (optional).
+  4. The system joins the text and corrects technical terms using the glossary (slides and the lecturer's list), locally. The lecturer clicks any correction that is wrong to undo it.
+  5. The lecturer can repair the text with the AI, edit it, and write a summary with the AI (or keep the automatic one), then reads it and can download it.
+  6. Optionally the lecturer keeps the recording for the students (up to 100 MB).
+  7. The lecturer publishes the lecture: students of the course see the summary, the full transcript and the recording player.
 - **Main flow (live):** instead of steps 1 to 3 the lecturer records with the microphone; the browser's speech recognition produces the text and the system keeps the lecturer's voice and relevant student questions.
 - **Alternate flows:**
+  - 0a. The lecture already took place and was never opened: the lecturer adds it to the course by its date and continues from step 1.
   - 1a. File too large (over about 500 MB) or unsupported format: the page asks for another file, or for an audio-only export.
   - 3a. The AI service is unavailable or its quota is spent: the page shows the reason and the lecturer starts again; the parts already transcribed are not kept.
-- **Notes:** The result is a suggestion for a human to check. The audio is not stored, only the text. The class must be told before a recording is transcribed (the page says so). Accuracy is measured in the tools report. Correction and summary by an LLM are designed, not implemented.
+- **Notes:** The result is a suggestion for a human to check. Only the text is stored, unless the lecturer chooses to keep the recording for the students. The class must be told before a recording is transcribed (the page says so). Accuracy is measured in the tools report. The AI repair and summary are suggestions the lecturer checks before publishing.
 
 ### UC14: Submit homework and get feedback
 

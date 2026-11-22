@@ -12,11 +12,11 @@ A web-based attendance tool that works from the phone browser with nothing to in
 - checks that explain themselves: every suspect check-in shows its reasons to the lecturer, and the student never sees the status;
 - a live lecturer page with the attendance sheet, a typed head count with the gap, and Excel/CSV export;
 - lecturer approval of a suspect check-in (the checks flag, the lecturer decides), with the reasons kept and the approval reversible;
-- 128 automated tests, one simulated phone per scenario.
+- 133 automated tests, one simulated phone per scenario.
 
 On the same site (Course Hub, English interface) we also built:
 
-- a **course portal**: sign-in for students (student number and personal PIN) and lecturers (key and personal password), a list of courses for each user, live notes during a lecture, messages to the lecturer, and published lecture summaries;
+- a **course portal**: sign-in for students (student number and personal PIN) and lecturers (key and personal password), a list of courses for each user, live notes during a lecture, messages to the lecturer, and published lecture summaries, transcripts and recordings;
 - a **lecture transcript**: live in the browser or from an uploaded recording (the sound is extracted in the browser and sent in parts to an AI service), correction of English terms using the lecture slides, repair and a summary by AI, edited and published by the lecturer;
 - a **homework tool**: assignments per course, submissions (typed, PDF, photo or handwriting), a report with similarity and a course-content check, an AI review in Hebrew for the lecturer and for the student (with an anonymous comparison with the class), the mistakes that repeat across the class, bulk import, and opening the submitted file again.
 

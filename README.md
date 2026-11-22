@@ -22,7 +22,7 @@ Either way the lecturer receives a list but cannot tell how many students were a
 
 ## The solution
 
-A web app (works on iPhone and Android, no installation) made of five tools.
+A web app named **Course Hub** (works on iPhone and Android, no installation) made of five tools. The demo is hosted on Render and has a portal: students and lecturers log in with a personal password, see their courses, and each course page holds the lectures, notes, messages, summaries and homework.
 
 ### 1. Reliable attendance (core)
 
@@ -41,11 +41,11 @@ The lecturer creates a question in seconds and students answer from their phone.
 
 ### 4. Lecture transcript and summary (AI)
 
-The lecturer uploads the lecture recording (for example from Zoom or Meet). The system produces a transcript with a speech-to-text model, corrects technical terms with an LLM using the lecture slides as a glossary, and returns a summary.
+**Built in the demo.** The lecturer dictates live in Chrome, or uploads the recording of a lecture (audio or video), also of a lecture that already took place. The browser cuts the sound into parts and an AI speech model transcribes them. Technical terms are corrected from a glossary (the lecture slides or the lecturer's list), and the lecturer can undo any correction that is wrong, repair the text with the AI, edit it, and write a summary with the AI. When the lecturer publishes the lecture, students see the summary, the full transcript and, if the lecturer chose to keep it, a player for the recording (up to 100 MB).
 
 ### 5. Homework review (AI)
 
-A student or teacher uploads homework and receives a detailed LLM review, including a comparison with other students' work where this is allowed (see the limitations below).
+**Built in the demo.** The lecturer creates an assignment with the questions and the teacher's solution, and students (or the lecturer, in bulk) upload submissions as PDF, image or text. Names and ID numbers are removed before anything is sent to the AI. The lecturer gets a review in Hebrew, similarity to other submissions and a list of mistakes shared by several students. A student sees their own submission and the file, and gets feedback only when at least three other submissions exist.
 
 ## Scope
 
@@ -53,9 +53,9 @@ A student or teacher uploads homework and receives a detailed LLM review, includ
 
 | Level | Tools | What we deliver |
 |---|---|---|
-| **1: demo + full design** | Reliable attendance | Full design documents and a working demo |
-| **2: full design** | Quick polls, student comments | Full design documents |
-| **3: design + a small experiment** | Transcript and summary, homework review | Use cases, components, chosen tools, and one small experiment that shows the tool is feasible |
+| **1: demo + full design** | Reliable attendance | Full design documents and a working demo (133 automated tests) |
+| **2: full design** | Quick polls, student comments | Full design documents. Of these, only live notes from students and messages to the lecturer are built; polls are design only |
+| **3: design + experiment, then built** | Transcript and summary, homework review | Use cases, components, chosen tools, an experiment, and a working version in the demo that uses an external AI service |
 
 ### Out of scope (and why)
 
@@ -72,7 +72,8 @@ A student or teacher uploads homework and receives a detailed LLM review, includ
 - Indoor location is only accurate to tens of meters, so it proves "in the building", not "in this room". The rotating QR code and the check of the location against the class group cover that gap.
 - If a photo is used, students in the back rows may be hard to count, so the gap has a tolerance (10% of the check-ins).
 - A student can give the personal PIN to a friend, and the first person to enter a student's ID chooses the PIN (the lecturer can reset it). The system flags some of these cases but does not claim to stop all of them.
-- Speech-to-text accuracy on Hebrew lectures with English technical terms must be measured, not assumed.
+- Speech-to-text accuracy on Hebrew lectures with English technical terms was not measured, so we make no claim about it. The glossary correction can be wrong, which is why the lecturer can undo it.
+- Everything is kept in memory on a free server, so assignments, transcripts, recordings and passwords are lost when it restarts or sleeps.
 - LLM output can be wrong. Summaries and reviews are presented as suggestions for a human to check.
 - Recordings contain students' voices, and homework comparison involves other students' work. Both need consent and privacy rules, described in the SRS.
 

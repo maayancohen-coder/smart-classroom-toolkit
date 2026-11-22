@@ -109,19 +109,22 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 
 ### 2.7 Transcript and summary (UC13)
 
-**Status:** implemented in the demo in two ways. (1) Live: the lecturer's browser (Chrome) turns speech into text during the lecture. (2) Recording upload: the lecturer uploads a recording (video or audio); the browser extracts the sound on the lecturer's computer, cuts it into parts of about 6 minutes and the server sends each part to an AI speech service (Gemini) for transcription. In both ways the server then corrects technical terms by sound using a glossary taken from the lecture slides (locally, no LLM), produces an extractive summary (the most informative sentences, in their original order) and the lecturer can publish the summary to the students. Correction and summarisation by an LLM are designed and not in the demo.
+**Status:** implemented in the demo. The transcript comes (1) live, from the lecturer's browser (Chrome), or (2) from a recording: the lecturer uploads audio or video of a current or past lecture, the browser extracts the sound on the lecturer's computer, cuts it into parts of about 6 minutes, and the server sends each part to an AI speech service (Gemini). The server then corrects technical terms by sound from a glossary (slides and the lecturer's list, locally, no LLM); the lecturer can undo any correction that is wrong. The lecturer can repair the text with the AI, edit it, and write a summary with the AI (or use the automatic extractive one). The lecturer publishes the lecture: students then see the summary, the full transcript and, if the lecturer kept it, the recording.
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
 | FR-34 | The system shall let the lecturer upload a lecture recording (video or audio, up to about 500 MB) and optional slides (PowerPoint, PDF or text). | S | Done |
 | FR-34a | If the recording is a video, the sound shall be extracted from it. In the demo this is done in the lecturer's browser, so only audio leaves the computer. | S | Done (in the browser) |
 | FR-35 | The system shall produce a transcript, live from the microphone or from an uploaded recording. | S | Done |
-| FR-36 | The system shall correct the transcript using the slides' text as a glossary of terms. In the demo the correction is local, by sound similarity, without an LLM. | S | Done (local) |
-| FR-37 | The system shall produce a summary of the corrected transcript. In the demo it is extractive and computed locally; an LLM summary is designed. | S | Done (extractive) |
-| FR-38 | The system shall let the lecturer edit and download the transcript and summary and publish the summary to the students of the course. | S | Done |
+| FR-36 | The system shall correct the transcript using the slides' text and the lecturer's list as a glossary of terms. The correction is local, by sound similarity, and limited so that a term replaces at most a few words. | S | Done (local) |
+| FR-36a | The lecturer shall be able to undo any single term correction, and to repair the text with an AI service (part by part, content unchanged) and edit it by hand. | S | Done |
+| FR-37 | The system shall produce a summary of the corrected transcript: an automatic extractive one, or an AI-written one in Hebrew that the lecturer checks and saves. | S | Done |
+| FR-38 | The system shall let the lecturer edit and download the transcript and summary and publish them to the students of the course. | S | Done |
+| FR-38a | The lecturer shall be able to add a lecture that already took place (by date) to a course and upload its recording and transcript, also after the live lecture was closed. | S | Done |
+| FR-38b | If the lecturer chooses to keep the recording (up to 100 MB), the students of the course shall be able to play it, only after the lecture is published. | S | Done |
 | FR-39 | The system shall show the progress of a recording transcription (part N of M) and the reason for a failure. In the demo this is shown on the page while it runs; there is no background job that continues after the page is closed, and a failed part means starting again. | S | Done (progress on the page) |
 
-Not in the demo: a server-side background job, extracting audio on the server (for example with ffmpeg), and an LLM correction pass. The transcript of a recording includes every speaker; the lecturer-voice filter exists only in the live transcript.
+Not in the demo: a server-side background job and extracting audio on the server (for example with ffmpeg). A kept recording lives in memory, so it is lost when the free server restarts. The transcript of a recording includes every speaker; the lecturer-voice filter exists only in the live transcript.
 
 ### 2.8 Homework (UC14, UC15)
 

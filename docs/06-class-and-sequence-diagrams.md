@@ -1,6 +1,6 @@
 # Class and Sequence Diagrams
 
-Status: draft v1
+Status: v2 (sections 1.6, 2.6 and 2.7 show the transcript, recording and homework tools as they were built)
 
 This document turns the components (document 05) into classes and shows how objects talk to each other in the main scenarios. The attendance tool is designed in full detail. The other tools are shown at the level needed to see how they fit.
 
@@ -352,6 +352,75 @@ classDiagram
     LLMClient <|.. FakeLLMClient
 ```
 
+### 1.6 Portal, transcript and homework as built
+
+Sections 1.4 and 1.5 are the first design. In the demo the AI tools were built differently, to fit a free server: there is no background job runner, because the browser sends the recording in parts and the server answers each part directly; and one `Transcriber` adapter (Gemini, with a Claude variant) reads scans, transcribes audio and completes text. This diagram shows what exists in the code.
+
+```mermaid
+classDiagram
+    class Catalog {
+        +get(courseId) Course
+        +forStudent(studentId) List~Course~
+        +forLecturer(lecturerId) List~Course~
+    }
+    class Course {
+        +String courseId
+        +String name
+        +hasStudent(studentId) bool
+    }
+    class LectureSession {
+        +String courseId
+        +bool closed
+        +String transcriptRaw
+        +String transcriptCorrected
+        +String summaryAi
+        +bool summaryPublished
+        +bytes recording
+    }
+    class Transcriber {
+        <<interface>>
+        +transcribe(data, mime) String
+        +transcribeAudio(data, mime) String
+        +complete(prompt) String
+    }
+    class GeminiTranscriber
+    class HomeworkStore {
+        +create(course, title) Assignment
+        +submit(assignment, studentId, name, filename, text)
+    }
+    class Assignment {
+        +String title
+        +String questionsText
+        +String solutionText
+        +Map submissions
+    }
+    class Submission {
+        +String text
+        +bytes original
+        +String mime
+    }
+    class TranscriptCorrector {
+        +parseGlossary(text) List~String~
+        +correctTranscript(raw, terms) Correction
+    }
+    class PinStore {
+        +checkOrSet(key, pin) Verdict
+    }
+
+    Catalog "1" o-- "*" Course
+    Course "1" <-- "*" LectureSession
+    Course "1" <-- "*" Assignment
+    HomeworkStore "1" o-- "*" Assignment
+    Assignment "1" *-- "*" Submission
+    GeminiTranscriber ..|> Transcriber
+    LectureSession ..> TranscriptCorrector
+    LectureSession ..> Transcriber
+    Assignment ..> Transcriber
+    PinStore ..> Course
+```
+
+The data is kept in memory, so it is lost when the free server restarts (document 08).
+
 ## 2. Sequence diagrams
 
 ### 2.1 Open a lecture and show the rotating QR code (UC1, UC2)
@@ -522,12 +591,101 @@ sequenceDiagram
     C-->>User: show review
 ```
 
+### 2.6 Recording upload, transcript, summary and publishing, as built (UC13)
+
+The lecture can be a live one or one that already took place: the lecturer can add a past lecture to a course by its date, and then upload its recording.
+
+```mermaid
+sequenceDiagram
+    actor Lecturer
+    participant B as Lecturer browser
+    participant API
+    participant AI as Transcriber (Gemini)
+    participant S as LectureSession
+    actor Student
+
+    Lecturer->>B: Choose a recording (audio or video), optionally keep it for students
+    B->>B: Decode the sound, resample to 16 kHz mono, cut into 6-minute WAV parts
+    loop each part
+        B->>API: POST recording-chunk
+        API->>AI: transcribeAudio(part)
+        AI-->>API: text
+        API-->>B: text
+    end
+    B->>API: POST transcript (raw text, glossary, excluded terms)
+    API->>S: store raw and glossary-corrected text
+    API-->>B: corrected text and list of fixes
+    opt Lecturer undoes a wrong fix
+        Lecturer->>B: Click the fix
+        B->>API: POST transcript (excluded term added)
+    end
+    opt Repair with AI
+        loop each part of the text
+            B->>API: POST transcript/ai-fix
+            API->>AI: complete(fix prompt)
+            AI-->>API: repaired text
+        end
+        B->>API: POST transcript/save
+    end
+    opt Summary with AI
+        B->>API: POST ai-summary
+        API->>AI: complete(summary prompt)
+        AI-->>B: draft summary
+        Lecturer->>B: Edit and save
+        B->>API: POST summary/text
+    end
+    opt Keep the recording
+        B->>API: POST recording-file (up to 100 MB)
+        API->>S: keep in memory
+    end
+    Lecturer->>API: Publish to students
+    Student->>API: Open the course page
+    API-->>Student: summary, full transcript and the recording player
+```
+
+### 2.7 Homework with AI review, as built (UC14)
+
+```mermaid
+sequenceDiagram
+    actor Student
+    actor Lecturer
+    participant API
+    participant HS as HomeworkStore
+    participant AI as Transcriber (Gemini)
+
+    Lecturer->>API: Create assignment (questions, teacher solution, course material)
+    API->>HS: create(course, title)
+    Student->>API: Upload the submission (PDF, image or text)
+    alt the file has selectable text
+        API->>API: Extract the text
+    else a scan or photo
+        API->>AI: transcribe(file)
+        AI-->>API: text
+    end
+    API->>HS: submit(assignment, studentId, text, original file)
+    API-->>Student: Submitted (the student can view the text and the file)
+    Lecturer->>API: Review submission
+    API->>API: Remove names and ID numbers from the text
+    API->>AI: complete(review prompt)
+    AI-->>API: review in Hebrew
+    API-->>Lecturer: review, similarity to other submissions, content check
+    Lecturer->>API: Common mistakes (AI)
+    API->>AI: complete(prompt with all submissions)
+    AI-->>Lecturer: mistakes shared by several students
+    opt at least 3 other submissions exist
+        Student->>API: Request feedback
+        API->>AI: complete(review prompt)
+        AI-->>Student: feedback for this student only
+    end
+```
+
 ## 3. Design patterns and principles
 
 | Where | Pattern or principle | Why |
 |---|---|---|
 | `AttendanceCheck` and its five subclasses | **Strategy** | Each signal is a separate algorithm behind one interface. A new check is a new class and nothing else changes (FR-19, NFR-23). |
 | `PeopleCounter`, `SpeechToText`, `LLMClient`, `ReportExporter` | **Adapter / dependency inversion** | The system depends on our interface. A provider is replaced, or faked in a test, without changing the rest. |
+| `Transcriber` (`GeminiTranscriber`, `ClaudeTranscriber`) | **Adapter** | The demo reads scans, transcribes audio and completes text through one interface. The model is a setting (`GEMINI_MODEL`). |
 | `AttendanceService`, `MediaService`, `HomeworkService` | **Facade** | The API layer calls one simple entry point per tool. |
 | `DeviceRegistry`, `TicketStore`, `Roster` | **Repository** | Storage is hidden. In the demo it is in memory, and it can become a database later. |
 | `AttendanceEvaluator` | **Single responsibility** | It only combines results. It does not know how any check works. |
@@ -563,3 +721,6 @@ sequenceDiagram
 | 2.3 Head-count gap | `diagrams/seq-headcount-gap.svg` |
 | 2.4 Transcript and summary | `diagrams/seq-transcript-summary.svg` |
 | 2.5 Homework review | `diagrams/seq-homework-review.svg` |
+| 1.6 Portal, transcript and homework as built | `diagrams/class-built-portal-ai.svg` |
+| 2.6 Recording upload and publishing, as built | `diagrams/seq-recording-upload.svg` |
+| 2.7 Homework with AI review, as built | `diagrams/seq-homework-ai-review.svg` |
