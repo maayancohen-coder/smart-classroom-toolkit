@@ -1,6 +1,6 @@
 # Use Cases and User Stories
 
-Status: draft v1
+Status: v2 (updated for the implemented demo)
 
 ## 1. Actors
 
@@ -28,9 +28,11 @@ Status: draft v1
 | UC10 | Send a comment or suggestion | Student | Light tool |
 | UC11 | View poll results and comments | Lecturer | Light tool |
 | UC12 | Add a student to the attendance after the lecture is closed | Lecturer | Secondary |
-| UC13 | Get a transcript and summary of a lecture recording | Lecturer | AI tool |
+| UC13 | Get a transcript and summary of a lecture | Lecturer | AI tool (live version in the demo) |
 | UC14 | Get an LLM review of homework | Student, Lecturer | AI tool |
 | UC15 | Compare homework with other students' work | Lecturer, Student | AI tool |
+| UC16 | Sign in and see my courses | Student, Lecturer | Core |
+| UC17 | Write notes, message the lecturer and read published summaries | Student | Portal |
 
 ## 3. User stories
 
@@ -160,29 +162,51 @@ Status: draft v1
   - 1a. File too large or unsupported format: the system asks for another file.
   - 2a. Service unavailable or fails: the job is marked failed, and the lecturer can retry.
   - 5a. Lecturer shares the summary with the class (optional).
-- **Notes:** The result is a suggestion for a human to check. Accuracy is measured in the tools report.
+- **Notes:** The result is a suggestion for a human to check. In the demo the flow is live: speech recognition in the lecturer's browser, a local correction by the slides' glossary and an extractive summary that the lecturer can publish to the class; the recording upload and LLM steps above are designed, not implemented. Accuracy is measured in the tools report.
 
-### UC14: Get an LLM review of homework
+### UC14: Submit homework and get feedback
 
-- **Actor:** Student or lecturer
-- **Preconditions:** A homework file is available (for example PDF or text).
+- **Actor:** Student (and lecturer)
+- **Preconditions:** The lecturer created an assignment for the course (questions, optional lecturer solution and course material). The student is signed in or enters the student number and PIN.
 - **Main flow:**
-  1. The user uploads the homework and, if available, the assignment text.
-  2. System sends them to the LLM service with the review instructions.
-  3. System returns a structured review: strengths, mistakes, missing parts, suggestions.
+  1. The student opens the assignment of a course and attaches a file (PDF, photo or handwritten scan) or pastes the text.
+  2. Optionally the student checks the text against the course material (not saved) or asks for an AI review.
+  3. The student submits. The system extracts the text (a vision model reads scans) and stores the submission and the file.
+  4. The student opens the course page, sees that the homework is submitted and can open the submitted text and file.
 - **Alternate flows:**
-  - 1a. Unsupported or unreadable file: the system asks for another file.
-  - 3a. The review is only visible to the student unless the student shares it.
+  - 1a. Unsupported or unreadable file: the system asks for another file or for pasted text.
+  - 2a. The AI service is unavailable or its quota is spent: the page shows the reason; submission does not depend on it.
+  - 3a. Submitting again replaces the earlier submission.
+- **Notes:** The AI review is written in Hebrew, is a suggestion and not a grade, and the screen says that the text is sent to an external AI service after redaction of names and ID numbers.
 
-### UC15: Compare homework with other students' work
+### UC15: Review and compare homework (lecturer and student feedback)
 
-- **Actor:** Lecturer (and a student, only against reference material the lecturer provides)
-- **Preconditions:** Several submissions of the same assignment were uploaded by the lecturer, or the lecturer provided reference solutions.
+- **Actor:** Lecturer; a student for their own feedback
+- **Preconditions:** Several submissions of the same assignment exist (uploaded by students or imported by the lecturer).
+- **Main flow (lecturer):**
+  1. The lecturer opens the assignment report: similarity to the lecturer's solution, course terms used and missing, terms outside the course material, similar pairs.
+  2. The lecturer runs an AI review of one submission, by the course material only or against the lecturer's solution, optionally compared with the classmates (anonymous).
+  3. The lecturer asks for the common mistakes: the system sends all answers (anonymous, numbered) to the LLM and shows the mistakes that repeat, what the class did well and what to re-teach.
+- **Main flow (student feedback):** the student asks for AI feedback on the submission; when at least 3 other students submitted and the lecturer allows it, the feedback includes an anonymous comparison with the class.
+- **Notes:** A student never sees another student's work or name and the feedback does not quote classmates. The lecturer can switch the class comparison off per assignment. Names and ID numbers are removed before text is sent to the LLM.
+
+### UC16: Sign in and see my courses
+
+- **Actor:** Student, lecturer
 - **Main flow:**
-  1. Lecturer selects the assignment and starts the comparison.
-  2. System asks the LLM service to compare the submissions and report similarities and common mistakes.
-  3. System shows the report to the lecturer.
-- **Notes:** A student never sees another student's work. Students are told that comparison is performed. This is detailed in the SRS (privacy).
+  1. The user opens the site and chooses Student or Lecturer.
+  2. A student enters the student number and PIN; a lecturer chooses their name and enters the lecturer key and personal password. The first PIN or password entered becomes the user's own and cannot be changed.
+  3. The system shows the courses of the user from the course catalogue. A student also sees which courses have a live lecture.
+- **Alternate flows:** a wrong PIN or password is refused; after 5 wrong attempts the account is locked for 5 minutes.
+
+### UC17: Write notes, message the lecturer and read published summaries
+
+- **Actor:** Student
+- **Main flow:**
+  1. In a course with a live lecture the student joins it and writes short notes; the lecturer sees them in real time.
+  2. In the course page the student sends a short message to the lecturer.
+  3. After the lecture the student reads the summary if the lecturer published it.
+- **Notes:** Notes and messages are rate limited and limited in length.
 
 ## 5. Light tools (short form)
 
@@ -199,5 +223,6 @@ Status: draft v1
 | What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. Not validated: the class-photo experiment was dropped (tools report, 3.6). |
 | Are comments anonymous? | The student chooses for each comment: anonymous or with their name. |
 | Where does the lecture recording come from? | The lecturer uploads the file; there is no Zoom or Meet integration. |
-| How is the transcript kept accurate? | A speech-to-text model, then an LLM corrects terms using the slides as a glossary. Accuracy is measured on a real sample in the tools report. |
-| Whose homework can be compared? | The lecturer can compare submissions of one assignment. A student can only compare against reference material provided by the lecturer. |
+| How is the transcript kept accurate? | Demo: live speech recognition, then a local correction by sound using the slides as a glossary. Designed: a speech-to-text service and an LLM correction. Accuracy is measured on a real sample in the tools report. |
+| Whose homework can be compared? | The lecturer sees the comparison of submissions of one assignment. A student gets only an anonymous, general comparison with the class (no quotes, at least 3 other submissions, can be switched off by the lecturer). |
+| Is the data kept? | Not across a restart or a new deployment in the demo; see the SRS constraints. |

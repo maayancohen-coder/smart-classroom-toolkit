@@ -1,6 +1,6 @@
 # Software Requirements Specification (SRS)
 
-Status: draft v1
+Status: v2 (updated for the implemented demo)
 
 ## 1. Introduction
 
@@ -10,7 +10,7 @@ This document defines what the smart-classroom-toolkit must do and the qualities
 
 ### 1.2 Scope
 
-A web application for lecturers and students with five tools: reliable attendance, student comments, quick polls, lecture transcript and summary, and homework review. See the README for the scope and the planned depth of each tool.
+A web application (Course Hub) for lecturers and students with a course portal and these tools: reliable attendance, student comments, quick polls, lecture transcript and summary, and homework review. The interface is in English. See the README for the scope and the planned depth of each tool.
 
 ### 1.3 Definitions
 
@@ -26,6 +26,8 @@ A web application for lecturers and students with five tools: reliable attendanc
 | Class group | The centre and spread of the locations of the check-ins in one session |
 | ASR | Automatic speech recognition (speech-to-text) |
 | LLM | Large language model |
+| Course portal | The pages a signed-in student or lecturer sees: their courses, live lecture, notes, messages, homework and published summaries |
+| Redaction | Removing names and ID numbers from text before it is sent to an external AI service |
 
 ### 1.4 Priority
 
@@ -107,24 +109,51 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 
 ### 2.7 Transcript and summary (UC13)
 
+**Status:** implemented in the demo as a live transcript: the lecturer's browser (Chrome) turns speech into Hebrew text during the lecture; the server corrects technical terms by sound using a glossary taken from the lecturer's slides (no external service), and produces an extractive summary (the most informative sentences, in their original order). Uploading a recording, a separate ASR service and LLM correction or summarisation (FR-34, FR-34a, FR-35 as a file job, FR-36 and FR-37 with an LLM) are designed behind swappable components and are **not in the demo**.
+
+| ID | Requirement | Priority | Status |
+|---|---|---|---|
+| FR-34 | The system shall let the lecturer upload a lecture recording and optional slides. Slides (PowerPoint or PDF) are implemented; a recording upload is designed. | S | Slides: done. Recording: designed |
+| FR-34a | If the recording is a video, the system shall extract its audio track before transcription. | S | Designed |
+| FR-35 | The system shall produce a transcript. In the demo this is live speech recognition in the lecturer's browser. | S | Done (live) |
+| FR-36 | The system shall correct the transcript using the slides' text as a glossary of terms. In the demo the correction is local, by sound similarity, without an LLM. | S | Done (local) |
+| FR-37 | The system shall produce a summary of the corrected transcript. In the demo it is extractive and computed locally. | S | Done (extractive) |
+| FR-38 | The system shall let the lecturer edit and download the transcript and summary and publish the summary to the students of the course. | S | Done |
+| FR-39 | The system shall run transcription as a background job and show its progress and failure. Applies to a recording upload. | S | Designed |
+
+### 2.8 Homework (UC14, UC15)
+
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-34 | The system shall let the lecturer upload a lecture recording (video or audio file, for example exported from Zoom, Meet or Google Classroom) and optional slides. | S |
-| FR-34a | If the recording is a video, the system shall extract its audio track before transcription. | S |
-| FR-35 | The system shall produce a transcript with an ASR service. | S |
-| FR-36 | The system shall correct the transcript with an LLM using the slides' text as a glossary of terms. | S |
-| FR-37 | The system shall produce a summary of the corrected transcript with an LLM. | S |
-| FR-38 | The system shall let the lecturer edit, download, and optionally share the transcript and summary. | S |
-| FR-39 | The system shall run transcription as a background job and show its progress and failure. | S |
+| FR-40 | The system shall let a lecturer create an assignment for a course with optional files: the questions, the lecturer's solution and the course material. Files may be PDF, text or an image; text is extracted and scans or handwriting are read by a vision model. | S |
+| FR-40a | The system shall let a student submit a solution to an assignment of a course (a file or pasted text) and shall let the student open the submission, and the uploaded file, later from the course page. A new submission replaces the earlier one. | S |
+| FR-40b | The system shall let the lecturer import many submissions at once, each file named by the student number. | S |
+| FR-41 | The system shall give the lecturer a report per assignment: similarity to the lecturer's solution, the share of course terms used, terms missing, English terms that are not in the course material, and the most similar classmate. | S |
+| FR-41a | The system shall let the student run a check against the course material before submitting, without saving or sending it to the lecturer. | S |
+| FR-42 | The system shall flag pairs of submissions that are very similar (at least 50% shared word sequences, the assignment text excluded). | S |
+| FR-42a | The system shall show the lecturer the terms that many students miss or that many students use outside the course material. | S |
+| FR-43 | The system shall never show a student another student's work or name. | S |
+| FR-44 | The system shall let the lecturer get an LLM review of one submission, judged either by the course material only or against the lecturer's solution, optionally compared with the classmates' answers. | S |
+| FR-44a | The system shall let the student get an LLM review of their own submission, judged by the course material. When at least 3 other students have submitted and the lecturer allows it, the review shall include an anonymous comparison with the class that does not quote or paraphrase any classmate. | S |
+| FR-44b | The system shall let the lecturer get from an LLM the mistakes that repeat across all submissions of an assignment, what the class did well and what to re-teach, with answers referred to by number only. | S |
+| FR-44c | The review text shall be written in Hebrew; mathematical expressions and technical terms stay in their original form. | S |
+| FR-45 | Before text is sent to an LLM the system shall remove ID numbers and the names of the submitter and of the class (redaction) and shall mark the submitted text as data that must not be obeyed as instructions. | S |
+| FR-46 | The system shall let the lecturer switch off, per assignment, the comparison with classmates in the students' feedback. | S |
+| FR-47 | The system shall limit a student to one LLM request every 30 seconds. | S |
 
-### 2.8 Homework review (UC14, UC15)
+### 2.9 Course portal and accounts (UC16, UC17)
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-40 | The system shall let a student or lecturer upload homework and receive an LLM review with strengths, mistakes, missing parts and suggestions. | S |
-| FR-41 | The review shall be visible only to the uploader unless they share it. | S |
-| FR-42 | The system shall let a lecturer compare submissions of one assignment and report similarities and common mistakes. | S |
-| FR-43 | The system shall never show a student another student's work. | S |
+| FR-48 | The system shall let a student sign in with the student number and the personal PIN, and a lecturer sign in with the lecturer key and a personal password. | M |
+| FR-48a | The personal PIN (student) and personal password (lecturer) shall be chosen on the first sign-in and cannot be changed afterwards, except by a lecturer reset of a student's PIN (FR-18). | M |
+| FR-48b | For testing, the lecturer shall be able to download a file listing for each student and lecturer whether a password is set and, when the server is configured to keep it, the chosen value. This can be switched off. | S |
+| FR-49 | The system shall show each student the courses they take and each lecturer the courses they teach, from a course catalogue file kept with the code. | M |
+| FR-50 | The system shall show a student whether a lecture is live in each course and let the student join it. | S |
+| FR-51 | A student shall be able to write short notes during a live lecture, and to see their own notes. The lecturer shall see the notes in real time. Notes are rate limited. | S |
+| FR-52 | A student shall be able to send a short message to the lecturer of a course; the lecturer shall see the messages of the course. | S |
+| FR-53 | The lecturer shall be able to publish the lecture summary to the students of the course, who then see it in the course page. | S |
+| FR-54 | The student home page shall offer homework submission and attendance, and attendance shall offer scanning the QR code with the in-page camera. | S |
 
 ## 3. Non-functional requirements
 
@@ -134,7 +163,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 |---|---|
 | NFR-1 | Tokens shall be signed with HMAC and compared in constant time. A forged or modified token shall be rejected. |
 | NFR-2 | A check-in ticket shall be single-use and shall expire after 2 minutes (configurable). |
-| NFR-3 | Lecturer functions shall require authentication. A student shall not be able to call a lecturer function. |
+| NFR-3 | Lecturer functions shall require authentication (lecturer key and personal password). A student shall not be able to call a lecturer function, and a student shall see only their own submissions and the courses they take. |
 | NFR-4 | All traffic shall use HTTPS. |
 | NFR-5 | The device identifier shall be a random value stored in a cookie that is not readable by page scripts. |
 | NFR-6 | The system shall limit the rate of check-in attempts per client to slow down guessing and scripted abuse. In the demo only the PIN lock (FR-9b) is implemented; general rate limiting is future work. |
@@ -145,8 +174,8 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 |---|---|
 | NFR-7 | Class photos shall be deleted right after counting. Only the count is kept. |
 | NFR-8 | Location readings shall be used for verification and kept only with the check-in, to explain the result. |
-| NFR-9 | Lecture recordings contain students' voices. The lecturer shall confirm that the class was informed before uploading. |
-| NFR-10 | Homework data sent to an external LLM shall be limited to what the review needs. Students shall be informed that comparison is performed. |
+| NFR-9 | Live transcription in the lecturer's browser uses the browser's speech service (for Chrome, Google), and a recording would contain students' voices. The lecturer shall make sure the class is informed. |
+| NFR-10 | Homework data sent to an external LLM (Gemini) shall be limited to what the review needs: names and ID numbers are removed first (FR-45), classmates are anonymous, and the screens tell the user that the text is sent to an external AI service. Students are informed that a comparison with the class is performed. The free API tier may use submitted data to improve the service, so real student data needs a paid tier or an agreement. |
 | NFR-11 | The system shall not use face recognition. |
 
 ### 3.3 Performance and scalability
@@ -164,7 +193,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | NFR-15 | A student shall be able to check in with one scan and, after the first time, by typing only the personal PIN. |
 | NFR-16 | The lecturer shall open a session with one action and shall not need to do anything during the lecture. |
 | NFR-17 | The student pages shall work on current iPhone and Android browsers, with no installation. |
-| NFR-18 | The interface shall support Hebrew (right to left). |
+| NFR-18 | The interface is in English. Hebrew content (names, AI reviews, transcripts) shall display correctly, each text block in its own direction. |
 
 ### 3.5 Reliability and quality
 
@@ -173,7 +202,8 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | NFR-19 | If the session has a classroom location and the phone does not provide a location, the check-in shall be refused (FR-11a). If the classroom location was not set, no location is required. |
 | NFR-20 | If an external service (ASR, LLM, people counter) fails, the rest of the system shall keep working and the job shall be retryable. |
 | NFR-21 | ASR accuracy shall be measured on a real lecture sample and reported in the tools report. No accuracy is promised before the measurement. |
-| NFR-22 | LLM outputs shall be marked as suggestions to be checked by a person. |
+| NFR-22 | LLM outputs shall be marked as suggestions to be checked by a person, and shall never be shown as a grade. |
+| NFR-22a | If the AI service fails or its quota is spent, the page shall show the exact reason, and the lecturer shall have a live test of the AI service (key, model, answer time). |
 
 ### 3.6 Maintainability
 
@@ -187,6 +217,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 - Web application only; no native apps and no NFC or Bluetooth.
 - The class roster is provided by the lecturer; there is no integration with Moodle or the university portal.
 - Recordings are uploaded by the lecturer; there is no Zoom or Meet integration.
+- Storage is in memory (except the course catalogue file and, if configured, the passwords file). A restart or a new deployment on the free hosting plan erases sessions, assignments and submissions. A database behind the existing storage layer is designed (see the components document) and not part of the demo.
 - Students have a phone with a camera, a browser, and mobile data or campus Wi-Fi.
 - Indoor location accuracy is limited to tens of meters.
 - External AI services are used for ASR, people counting and LLM tasks; the exact tools are selected in the tools report.
@@ -211,4 +242,5 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | UC7 | FR-18 |
 | UC8 to UC11 | FR-29 to FR-33 |
 | UC13 | FR-34 to FR-39 |
-| UC14, UC15 | FR-40 to FR-43 |
+| UC14, UC15 | FR-40 to FR-47 |
+| UC16, UC17 | FR-48 to FR-54 |
