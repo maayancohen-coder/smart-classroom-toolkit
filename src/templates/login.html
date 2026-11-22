@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block head %}<style>
+  .tabs { display: flex; gap: 8px; margin: 14px 0 4px; }
+  .tabs button { flex: 1; } .tabs button.on { background: var(--accent); color: #fff; }
+  select { width: 100%; font-size: 1.1rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); }
+  #msg { color: var(--bad); }
+</style>{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <h1>Sign in</h1>
+  <div class="tabs">
+    <button class="secondary on" id="tabS" type="button">Student</button>
+    <button class="secondary" id="tabL" type="button">Lecturer</button>
+  </div>
+  <div id="student">
+    <label for="sid">Student number</label><input id="sid" inputmode="numeric" autocomplete="off">
+    {% if pin_required %}<label for="pin">Personal PIN</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+    <p class="muted" style="font-size:.9rem">The PIN you enter the first time becomes your personal PIN. It is also used for attendance.</p>{% endif %}
+  </div>
+  <div id="lecturer" style="display:none">
+    <label for="lid">Lecturer</label>
+    <select id="lid">{% for l in lecturers %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select>
+    <label for="key">Lecturer key</label><input id="key" type="password" autocomplete="off">
+    <label for="lpw">Personal password</label><input id="lpw" type="password" autocomplete="off">
+    <p class="muted" style="font-size:.9rem">The password you enter the first time becomes your personal password and cannot be changed.</p>
+  </div>
+  <button class="full" id="go">Sign in</button>
+  <p id="msg"></p>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+let role = "student";
+function pick(r) {
+  role = r; $("student").style.display = r === "student" ? "" : "none"; $("lecturer").style.display = r === "lecturer" ? "" : "none";
+  $("tabS").classList.toggle("on", r === "student"); $("tabL").classList.toggle("on", r === "lecturer");
+}
+$("tabS").onclick = () => pick("student"); $("tabL").onclick = () => pick("lecturer");
+if (location.hash === "#lecturer") pick("lecturer");
+$("go").onclick = async () => {
+  $("go").disabled = true; $("msg").textContent = "";
+  const body = role === "student" ? { student_id: $("sid").value, pin: $("pin") ? $("pin").value : "" }
+                                  : { lecturer_id: $("lid").value, key: $("key").value, password: $("lpw").value };
+  const res = await fetch("/api/login/" + role, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (data.ok) location.href = data.url; else { $("msg").textContent = data.error || "Error"; $("go").disabled = false; }
+};
+</script>
+{% endblock %}

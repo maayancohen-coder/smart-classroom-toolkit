@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Home{% endblock %} · Course Hub</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6ec;
+    --accent: #2f5bea; --ok: #1a7f4b; --ok-bg: #e3f6ec; --warn: #9a6200; --warn-bg: #fff3d6;
+    --bad: #b42318; --bad-bg: #fde7e5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171f; --card: #1d212c; --text: #eef0f5; --muted: #98a2b3; --line: #2c3240;
+      --accent: #7f9cff; --ok: #5fd39a; --ok-bg: #173627; --warn: #f3c56b; --warn-bg: #3b2f12;
+      --bad: #ff8d84; --bad-bg: #3d1d1b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 24px 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; }
+  p.muted, .muted { color: var(--muted); }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; }
+  input { width: 100%; font-size: 1.1rem; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  button, .btn { display: inline-block; font-size: 1.05rem; font-weight: 600; padding: 12px 18px;
+    border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer;
+    text-decoration: none; }
+  button.secondary, .btn.secondary { background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); }
+  button.full { width: 100%; margin-top: 18px; }
+  button:disabled { opacity: .55; cursor: default; }
+  a { color: var(--accent); }
+  textarea, pre, .plain { unicode-bidi: plaintext; }   /* Hebrew text stays right-to-left inside an English page */
+  select { width: 100%; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); }
+
+  /* shared look: top bar, tiles, lists */
+  .topbar { background: var(--card); border-bottom: 1px solid var(--line); }
+  .topbar .in { max-width: 920px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center;
+    justify-content: space-between; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); text-decoration: none; }
+  .brand i { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #2f5bea, #7a4cf0);
+    display: inline-block; }
+  .who { font-size: .95rem; color: var(--muted); display: flex; gap: 12px; align-items: center; }
+  .hero { max-width: 920px; margin: 0 auto; padding: 36px 16px 8px; }
+  .hero h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 8px; }
+  .hero p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+  .tiles { max-width: 920px; margin: 0 auto; padding: 20px 16px; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .tile { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px;
+    text-decoration: none; color: var(--text); transition: transform .12s, box-shadow .12s, border-color .12s; }
+  .tile:hover, .tile:focus-visible { transform: translateY(-2px); border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(47, 91, 234, .14); outline: none; }
+  .tile .ico { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; margin-bottom: 14px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .tile .ico svg { width: 26px; height: 26px; }
+  .tile h2 { font-size: 1.2rem; margin: 0 0 4px; }
+  .tile p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .tile.off { opacity: .6; pointer-events: none; }
+  .section { max-width: 920px; margin: 0 auto; padding: 8px 16px 32px; }
+  .section h3 { margin: 18px 0 8px; font-size: 1.05rem; }
+  .list { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .list .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px;
+    border-bottom: 1px solid var(--line); text-decoration: none; color: var(--text); }
+  .list .row:last-child { border-bottom: 0; }
+  .list a.row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .85rem; font-weight: 600; }
+  .pill.live { background: var(--ok-bg); color: var(--ok); }
+  .pill.idle { background: var(--line); color: var(--muted); }
+  .back { max-width: 920px; margin: 0 auto; padding: 14px 16px 0; }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% block topbar %}<header class="topbar"><div class="in">
+  <a class="brand" href="/"><i></i> Course Hub</a>
+  <div class="who">{% block who %}{% endblock %}</div>
+</div></header>{% endblock %}
+{% block body %}{% endblock %}</body>
+</html>

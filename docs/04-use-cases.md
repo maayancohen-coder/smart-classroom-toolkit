@@ -1,6 +1,6 @@
 # Use Cases and User Stories
 
-Status: draft v1
+Status: v2 (updated for the implemented demo)
 
 ## 1. Actors
 
@@ -19,7 +19,7 @@ Status: draft v1
 | UC1 | Open a lecture session | Lecturer | Core |
 | UC2 | Display the rotating QR code | Lecturer | Core |
 | UC3 | Mark attendance | Student | Core |
-| UC4 | Upload a class photo and get the head-count gap | Lecturer | Core |
+| UC4 | Upload a class photo and get the head-count gap | Lecturer | Designed (the demo takes a typed count) |
 | UC5 | View and export the attendance sheet | Lecturer | Core |
 | UC6 | Close a lecture session | Lecturer | Core |
 | UC7 | Reset a student's phone binding | Lecturer | Secondary |
@@ -28,9 +28,11 @@ Status: draft v1
 | UC10 | Send a comment or suggestion | Student | Light tool |
 | UC11 | View poll results and comments | Lecturer | Light tool |
 | UC12 | Add a student to the attendance after the lecture is closed | Lecturer | Secondary |
-| UC13 | Get a transcript and summary of a lecture recording | Lecturer | AI tool |
+| UC13 | Get a transcript and summary of a lecture (live or from a recording) | Lecturer | AI tool |
 | UC14 | Get an LLM review of homework | Student, Lecturer | AI tool |
 | UC15 | Compare homework with other students' work | Lecturer, Student | AI tool |
+| UC16 | Sign in and see my courses | Student, Lecturer | Core |
+| UC17 | Write notes, message the lecturer and read published summaries | Student | Portal |
 
 ## 3. User stories
 
@@ -86,17 +88,18 @@ Status: draft v1
 - **Main flow:**
   1. Student scans the QR code with the phone camera, which opens the check-in page.
   2. System verifies the token is valid and recent.
-  3. If this phone is not yet known, student enters their student ID.
-  4. Student allows location sharing.
-  5. System runs the attendance checks (token freshness, device binding, classroom location, location plausibility, campus network).
+  3. Student enters their student ID (if the phone is not yet known) and their personal PIN. The first time, the PIN they enter becomes theirs.
+  4. Student allows location sharing. Without it the check-in is refused.
+  5. System verifies the PIN and runs the attendance checks (token freshness, device binding, classroom location, location plausibility, same coordinates, stale or frozen location, phone profile, class group, campus network).
   6. System records the check-in with a status (present or suspect) and the reasons.
   7. Student sees "attendance recorded". The status is **not** shown to the student.
 - **Alternate flows:**
   - 2a. Token expired or invalid: the check-in is refused and the student is asked to scan again.
   - 3a. Student ID not found in the roster: error, student can correct the number.
-  - 4a. Location denied: check-in is recorded as suspect.
+  - 3b. Wrong PIN: the check-in is refused. After 5 wrong PINs the student is locked for 5 minutes.
+  - 4a. Location denied or unavailable: the check-in is refused and the student is asked to allow location. Nothing is recorded.
   - 6a. The student already checked in: the system confirms and does not create a duplicate.
-  - 6b. The phone is already linked to another student: recorded as suspect.
+  - 6b. The phone is already linked to another student: recorded as suspect. A student who uses a new phone with the correct PIN is not suspect for that reason.
 - **Postcondition:** The check-in is stored; the sheet updates.
 
 ### UC4: Upload a class photo and get the head-count gap
@@ -112,6 +115,7 @@ Status: draft v1
   6. If the gap exceeds the tolerance, the system highlights the most suspect check-ins. The tolerance is **10% of the number of check-ins** (configurable), to allow for students hidden in back rows or behind others.
 - **Alternate flows:**
   - 3a. The counter fails or the image is unusable: system asks for another photo and keeps the session unchanged.
+- **Status:** designed; the demo supports only the manual head count. Counting from a photo was dropped from the demo (tools report, 3.6).
 - **Notes:** The gap says how many, not who. Back rows may be undercounted, hence the tolerance.
 
 ### UC5: View and export the attendance sheet
@@ -121,6 +125,8 @@ Status: draft v1
   1. Lecturer opens the sheet during or after the lecture.
   2. System shows every student in the roster with a status: present, suspect (with reasons) or absent.
   3. Lecturer exports it to Excel or CSV.
+- **Alternate flow:**
+  - 2a. Lecturer decides that a suspect student was really in the class and presses "approve". The student becomes present, the reasons stay in the notes marked "approved by lecturer", and the lecturer can undo it.
 
 ### UC6: Close a lecture session
 
@@ -142,43 +148,68 @@ Status: draft v1
   3. System marks the student present and records that the entry was **added manually by the lecturer**, with the time.
 - **Notes:** Students themselves can never check in after the lecture is closed. Manual entries do not count toward the head-count comparison logic as suspects, but are shown separately in the sheet.
 
-### UC13: Get a transcript and summary of a lecture recording
+### UC13: Get a transcript and summary of a lecture (live or from a recording)
 
 - **Actor:** Lecturer
-- **Preconditions:** The lecture has a recording file (for example exported from Zoom or Meet). Optionally, the lecture slides are available.
-- **Main flow:**
-  1. Lecturer uploads the recording and, optionally, the slides.
-  2. If the file is a video, the system extracts the audio track. System sends the audio to the Speech-to-Text service and receives a raw transcript.
-  3. System sends the raw transcript, together with the slides' text as a glossary, to the LLM service, which corrects technical terms and punctuation.
-  4. System sends the corrected transcript to the LLM service and receives a summary.
-  5. Lecturer reads the transcript and summary and can edit them or download them.
+- **Preconditions:** A lecture is open. Optionally the lecture slides are available.
+- **Main flow (recording):**
+  1. Lecturer opens the transcript page of the lecture and uploads the slides (optional) and the recording (video or audio).
+  2. The browser extracts the sound from the file on the lecturer's computer and cuts it into parts of about 6 minutes.
+  3. The system sends each part to the speech service (Gemini) and receives its text; the page shows "part N of M".
+  4. The system joins the text and corrects technical terms using the glossary (slides and the lecturer's list), locally. The lecturer clicks any correction that is wrong to undo it.
+  5. The lecturer can repair the text with the AI, edit it, and write a summary with the AI (or keep the automatic one), then reads it and can download it.
+  6. Optionally the lecturer keeps the recording for the students (up to 100 MB).
+  7. The lecturer publishes the lecture: students of the course see the summary, the full transcript and the recording player.
+- **Main flow (live):** instead of steps 1 to 3 the lecturer records with the microphone; the browser's speech recognition produces the text and the system keeps the lecturer's voice and relevant student questions.
 - **Alternate flows:**
-  - 1a. File too large or unsupported format: the system asks for another file.
-  - 2a. Service unavailable or fails: the job is marked failed, and the lecturer can retry.
-  - 5a. Lecturer shares the summary with the class (optional).
-- **Notes:** The result is a suggestion for a human to check. Accuracy is measured in the tools report.
+  - 0a. The lecture already took place and was never opened: the lecturer adds it to the course by its date and continues from step 1.
+  - 1a. File too large (over about 500 MB) or unsupported format: the page asks for another file, or for an audio-only export.
+  - 3a. The AI service is unavailable or its quota is spent: the page shows the reason and the lecturer starts again; the parts already transcribed are not kept.
+- **Notes:** The result is a suggestion for a human to check. Only the text is stored, unless the lecturer chooses to keep the recording for the students. The class must be told before a recording is transcribed (the page says so). Accuracy is measured in the tools report. The AI repair and summary are suggestions the lecturer checks before publishing.
 
-### UC14: Get an LLM review of homework
+### UC14: Submit homework and get feedback
 
-- **Actor:** Student or lecturer
-- **Preconditions:** A homework file is available (for example PDF or text).
+- **Actor:** Student (and lecturer)
+- **Preconditions:** The lecturer created an assignment for the course (questions, optional lecturer solution and course material). The student is signed in or enters the student number and PIN.
 - **Main flow:**
-  1. The user uploads the homework and, if available, the assignment text.
-  2. System sends them to the LLM service with the review instructions.
-  3. System returns a structured review: strengths, mistakes, missing parts, suggestions.
+  1. The student opens the assignment of a course and attaches a file (PDF, photo or handwritten scan) or pastes the text.
+  2. Optionally the student checks the text against the course material (not saved) or asks for an AI review.
+  3. The student submits. The system extracts the text (a vision model reads scans) and stores the submission and the file.
+  4. The student opens the course page, sees that the homework is submitted and can open the submitted text and file.
 - **Alternate flows:**
-  - 1a. Unsupported or unreadable file: the system asks for another file.
-  - 3a. The review is only visible to the student unless the student shares it.
+  - 1a. Unsupported or unreadable file: the system asks for another file or for pasted text.
+  - 2a. The AI service is unavailable or its quota is spent: the page shows the reason; submission does not depend on it.
+  - 3a. Submitting again replaces the earlier submission.
+- **Notes:** The AI review is written in Hebrew, is a suggestion and not a grade, and the screen says that the text is sent to an external AI service after redaction of names and ID numbers.
 
-### UC15: Compare homework with other students' work
+### UC15: Review and compare homework (lecturer and student feedback)
 
-- **Actor:** Lecturer (and a student, only against reference material the lecturer provides)
-- **Preconditions:** Several submissions of the same assignment were uploaded by the lecturer, or the lecturer provided reference solutions.
+- **Actor:** Lecturer; a student for their own feedback
+- **Preconditions:** Several submissions of the same assignment exist (uploaded by students or imported by the lecturer).
+- **Main flow (lecturer):**
+  1. The lecturer opens the assignment report: similarity to the lecturer's solution, course terms used and missing, terms outside the course material, similar pairs.
+  2. The lecturer runs an AI review of one submission, by the course material only or against the lecturer's solution, optionally compared with the classmates (anonymous).
+  3. The lecturer asks for the common mistakes: the system sends all answers (anonymous, numbered) to the LLM and shows the mistakes that repeat, what the class did well and what to re-teach.
+- **Main flow (student feedback):** the student asks for AI feedback on the submission; when at least 3 other students submitted and the lecturer allows it, the feedback includes an anonymous comparison with the class.
+- **Notes:** A student never sees another student's work or name and the feedback does not quote classmates. The lecturer can switch the class comparison off per assignment. Names and ID numbers are removed before text is sent to the LLM.
+
+### UC16: Sign in and see my courses
+
+- **Actor:** Student, lecturer
 - **Main flow:**
-  1. Lecturer selects the assignment and starts the comparison.
-  2. System asks the LLM service to compare the submissions and report similarities and common mistakes.
-  3. System shows the report to the lecturer.
-- **Notes:** A student never sees another student's work. Students are told that comparison is performed. This is detailed in the SRS (privacy).
+  1. The user opens the site and chooses Student or Lecturer.
+  2. A student enters the student number and PIN; a lecturer chooses their name and enters the lecturer key and personal password. The first PIN or password entered becomes the user's own and cannot be changed.
+  3. The system shows the courses of the user from the course catalogue. A student also sees which courses have a live lecture.
+- **Alternate flows:** a wrong PIN or password is refused; after 5 wrong attempts the account is locked for 5 minutes.
+
+### UC17: Write notes, message the lecturer and read published summaries
+
+- **Actor:** Student
+- **Main flow:**
+  1. In a course with a live lecture the student joins it and writes short notes; the lecturer sees them in real time.
+  2. In the course page the student sends a short message to the lecturer.
+  3. After the lecture the student reads the summary if the lecturer published it.
+- **Notes:** Notes and messages are rate limited and limited in length.
 
 ## 5. Light tools (short form)
 
@@ -192,8 +223,9 @@ Status: draft v1
 | Question | Decision |
 |---|---|
 | Can students check in after the lecture is closed? | No. Only the lecturer can add students to a closed lecture (UC12), and the entry is marked as added manually. |
-| What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. To be validated with the class-photo experiment. |
+| What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. Not validated: the class-photo experiment was dropped (tools report, 3.6). |
 | Are comments anonymous? | The student chooses for each comment: anonymous or with their name. |
-| Where does the lecture recording come from? | The lecturer uploads the file; there is no Zoom or Meet integration. |
-| How is the transcript kept accurate? | A speech-to-text model, then an LLM corrects terms using the slides as a glossary. Accuracy is measured on a real sample in the tools report. |
-| Whose homework can be compared? | The lecturer can compare submissions of one assignment. A student can only compare against reference material provided by the lecturer. |
+| Where does the lecture recording come from? | The lecturer uploads the file (video or audio, up to about 500 MB); there is no Zoom or Meet integration. The sound is extracted in the lecturer's browser. |
+| How is the transcript kept accurate? | Demo: live speech recognition or Gemini speech-to-text on an uploaded recording, then a local correction by sound using the slides as a glossary. Designed: an LLM correction pass. Accuracy is measured on a real sample in the tools report. |
+| Whose homework can be compared? | The lecturer sees the comparison of submissions of one assignment. A student gets only an anonymous, general comparison with the class (no quotes, at least 3 other submissions, can be switched off by the lecturer). |
+| Is the data kept? | Not across a restart or a new deployment in the demo; see the SRS constraints. |

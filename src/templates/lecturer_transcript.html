@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Transcript · {{ session.course }}{% endblock %}
+{% block head %}
+<style>
+  .page { max-width: 860px; margin: 0 auto; padding: 20px 16px; }
+  textarea { width: 100%; min-height: 130px; font: inherit; font-size: 1rem; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  textarea.small { min-height: 70px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .rec { background: #b42318; }
+  .note { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; margin: 12px 0; font-size: .92rem; }
+  .fix { display: inline-block; margin: 3px 4px; padding: 2px 10px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: .9rem; }
+  .miss, .drop { background: var(--warn-bg); color: var(--warn); }
+  button.fix { border: 0; cursor: pointer; font: inherit; font-size: .9rem; }
+  button.fix:hover { outline: 2px solid var(--accent); }
+  select { font-size: 1rem; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .meter { position: relative; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); }
+  .meter > i { position: absolute; top: 0; bottom: 0; width: 3px; background: #b42318; }
+  #live { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-height: 60px; max-height: 220px; overflow: auto; }
+  #live .cls { color: var(--muted); font-style: italic; }
+  #live .cls::before { content: "Quiet voice: "; font-size: .8rem; }
+  details { margin-top: 12px; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="page"><div class="card">
+  <h1>Lecture transcript · {{ session.course }}</h1>
+  <p class="muted">Record with the browser's microphone. The system keeps only the lecturer's voice (the loudest voice on the microphone) and relevant student questions the lecturer answered. English terms are corrected using a list.</p>
+  <div class="note">Dictation works in Chrome. The audio is processed by the browser's speech recognition service (in Chrome: Google); the system itself stores no audio, only text. Tell the class before recording. Separating the lecturer from the class is based on microphone loudness, not on speaker recognition, so the lecturer should be the closest to the microphone.</div>
+
+  <div class="row">
+    <select id="lang"><option value="he-IL">Hebrew</option><option value="en-US">English</option></select>
+    <button id="rec" type="button">Start recording</button>
+    <button id="cal" type="button" class="secondary">Calibrate lecturer's voice (5 seconds)</button>
+    <span class="muted" id="state"></span>
+  </div>
+  <label for="thr" style="margin-bottom:0">Loudness threshold: anything below the red line counts as the class</label>
+  <input id="thr" type="range" min="0.005" max="0.3" step="0.005" value="0.05" style="padding:0">
+  <div class="meter"><div id="lvl"></div><i id="mark"></i></div>
+
+  <label>Heard now</label>
+  <div id="live"></div>
+
+  <label for="recFile">Or upload a recording of the lecture (video or audio)</label>
+  <div class="row">
+    <input type="file" id="recFile" accept="video/*,audio/*,.mp4,.m4a,.mp3,.wav,.webm,.mov" style="width:auto">
+    <button id="upRec" type="button" class="secondary">Transcribe the recording</button>
+    <button id="keepOnly" type="button" class="secondary">Only save it for students (no transcription)</button>
+    <span class="muted" id="recState"></span>
+  </div>
+  <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="keepRec" style="width:auto"> Also keep the recording so students can play it (after you publish the lecture; up to 100 MB, so audio is best)</label>
+  <p class="muted" id="keptRec" style="margin:4px 0">{% if session.recording_name %}A recording is saved: {{ session.recording_name }} <a href="#" id="delRec">Remove it</a>{% endif %}</p>
+  <div class="meter"><div id="recBar"></div></div>
+  <p class="muted" style="font-size:.9rem">The browser extracts the sound from the file on your computer and sends only the audio, in parts of about 6 minutes, to the AI service for transcription. Only the text is stored, unless you tick the box above to keep the recording for students. Use Chrome; files up to about 500 MB. Tell the class before you transcribe a recording.</p>
+
+  <details>
+    <summary>Or paste text by hand (instead of recording)</summary>
+    <textarea id="raw" placeholder="Text to paste"></textarea>
+  </details>
+
+  <label for="slides">Lecture slides (PowerPoint, PDF or text)</label>
+  <div class="row">
+    <input type="file" id="slides" accept=".pptx,.pdf,.txt,.md" style="width:auto">
+    <button id="upSlides" type="button" class="secondary">Read terms from the slides</button>
+    <span class="muted" id="slidesState"></span>
+  </div>
+
+  <label for="glossary">Terms from the slides (one per line, or comma-separated)</label>
+  <textarea id="glossary" class="small" placeholder="Strategy, Adapter, Interface, Unit Test"></textarea>
+  <div class="row"><button id="fix" type="button">Produce transcript</button></div>
+
+  <div id="result" hidden>
+    <label>Transcript</label>
+    <textarea id="corrected"></textarea>
+    <div class="row">
+      <button id="aiFix" type="button" class="secondary">Repair with AI</button>
+      <button id="saveText" type="button" class="secondary">Save my edits</button>
+      <span class="muted" id="fixState"></span>
+    </div>
+    <p class="muted" style="font-size:.9rem">You can edit the transcript here. "Repair with AI" fixes misheard words and punctuation part by part without changing the content; the text is sent to an external AI service.</p>
+    <p id="fixes"></p>
+    <p id="dropped"></p>
+    <label for="aiSum">Summary for the students</label>
+    <textarea id="aiSum" dir="auto" placeholder="Press &quot;Write a summary with AI&quot;, edit it, then save. If you leave it empty, the automatic summary is shown."></textarea>
+    <div class="row">
+      <button id="aiSumBtn" type="button" class="secondary">Write a summary with AI</button>
+      <button id="saveSum" type="button" class="secondary">Save the summary</button>
+      <span class="muted" id="sumState"></span>
+    </div>
+    <p class="muted" style="font-size:.9rem">Check the summary before you publish it. Publish it from the course page (Publish to students).</p>
+    <div class="row">
+      <a class="btn secondary" id="dl" href="/api/session/{{ session.session_id }}/transcript.txt">Download as a file</a>
+      {% if session.course_id %}<a class="btn secondary" href="/lecturer/course/{{ session.course_id }}">Back to the course</a>{% endif %}
+      {% if not session.closed %}<a class="btn secondary" href="/lecturer/{{ session.session_id }}">Back to the lecture</a>{% endif %}
+    </div>
+  </div>
+</div></div>
+
+<script>
+const SID = {{ session.session_id|tojson }};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const now = () => performance.now() / 1000;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, recording = false, lastFinal = now(), interim = "";
+let segments = [];            // {text, level, t0, t1}
+let samples = [];             // microphone level over time: {t, v}
+let audioCtx = null, analyser = null, buf = null, meterTimer = null, calibrating = null;
+
+if (!SR) { $("rec").disabled = true; $("state").textContent = "This browser does not support dictation. You can paste text by hand."; }
+
+const threshold = () => parseFloat($("thr").value);
+function updateMark() { $("mark").style.right = Math.min(100, threshold() / 0.3 * 100) + "%"; }
+function percentile(values, p) {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+}
+function levelBetween(t0, t1) {
+  return percentile(samples.filter(x => x.t >= t0 && x.t <= t1).map(x => x.v), 0.75);
+}
+function renderLive() {
+  const lim = threshold();
+  $("live").innerHTML = segments.map(s => `<span class="${s.level >= lim ? "" : "cls"}">${esc(s.text)}</span>`).join(" ")
+    + (interim ? ` <span class="muted">${esc(interim)}</span>` : "");
+  $("live").scrollTop = $("live").scrollHeight;
+}
+function addSegment(text, level, t0, t1) {            // also used by the tests
+  segments.push({ text, level, t0, t1 });
+  renderLive();
+}
+window.__addSegment = addSegment;
+
+async function ensureMic() {
+  if (analyser) return true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    buf = new Float32Array(analyser.fftSize);
+    meterTimer = setInterval(() => {
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0; for (const x of buf) sum += x * x;
+      const rms = Math.sqrt(sum / buf.length);
+      const t = now();
+      samples.push({ t, v: rms });
+      if (samples.length > 60000) samples.splice(0, 20000);
+      $("lvl").style.width = Math.min(100, rms / 0.3 * 100) + "%";
+      if (calibrating) calibrating.push(rms);
+    }, 100);
+    return true;
+  } catch (e) {
+    $("state").textContent = "No microphone access: " + (e.name || e);
+    return false;
+  }
+}
+
+function startRecognition() {
+  rec = new SR();
+  rec.lang = $("lang").value; rec.continuous = true; rec.interimResults = true;
+  rec.onresult = e => {
+    interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const text = e.results[i][0].transcript.trim();
+      if (e.results[i].isFinal) {
+        if (text) { const t1 = now(); addSegment(text, levelBetween(lastFinal, t1), lastFinal, t1); lastFinal = t1; }
+      } else interim += text + " ";
+    }
+    renderLive();
+  };
+  rec.onerror = e => { $("state").textContent = e.error === "not-allowed" ? "Microphone not allowed" : "Dictation error: " + e.error; };
+  rec.onend = () => { if (recording) { try { rec.start(); } catch (_) {} } };   // Chrome stops after silence
+  lastFinal = now();
+  rec.start();
+}
+$("rec").addEventListener("click", async () => {
+  if (!recording) {
+    if (!(await ensureMic())) return;
+    recording = true; startRecognition();
+  } else {
+    recording = false; try { rec.stop(); } catch (_) {}
+  }
+  $("rec").textContent = recording ? "Stop recording" : "Start recording";
+  $("rec").classList.toggle("rec", recording);
+  $("state").textContent = recording ? "Recording…" : "";
+});
+$("cal").addEventListener("click", async () => {
+  if (!(await ensureMic())) return;
+  $("state").textContent = "Lecturer: speak normally now…";
+  calibrating = [];
+  await new Promise(r => setTimeout(r, 5000));
+  const got = calibrating; calibrating = null;
+  const floor = percentile(got, 0.2);
+  const voiced = got.filter(v => v > Math.max(0.004, floor * 2));
+  if (voiced.length < 10) { $("state").textContent = "No speech heard. Try again closer to the microphone."; return; }
+  const level = percentile(voiced, 0.5);
+  $("thr").value = Math.min(0.3, Math.max(0.005, level * 0.35)).toFixed(3);
+  updateMark(); renderLive();
+  $("state").textContent = "Threshold set from the lecturer's voice";
+});
+$("upSlides").addEventListener("click", async () => {
+  const file = $("slides").files[0];
+  if (!file) { $("slidesState").textContent = "Choose a file"; return; }
+  const form = new FormData(); form.append("slides", file);
+  $("slidesState").textContent = "Reading…";
+  const res = await fetch(`/api/session/${SID}/slides`, { method: "POST", body: form });
+  const d = await res.json().catch(() => ({ ok: false, error: "Error" }));
+  if (!d.ok) { $("slidesState").textContent = d.error; return; }
+  const have = new Set($("glossary").value.split(/[\n,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean));
+  const extra = d.terms.filter(t => !have.has(t.toLowerCase()));
+  $("glossary").value = [$("glossary").value.trim(), ...extra].filter(Boolean).join(", ");
+  $("slidesState").textContent = `Read ${d.terms.length} terms from ${d.name}. You can edit the list.`;
+});
+// ---- recording upload: decode in the browser, cut into parts, transcribe each part ----
+const PART_SECONDS = 360, RATE = 16000, MAX_FILE = 500 * 1024 * 1024;
+function wavBlob(samples) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const put = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  put(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); put(8, "WAVEfmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, RATE, true); v.setUint32(28, RATE * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); put(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
+  return new Blob([buf], { type: "audio/wav" });
+}
+async function sendPart(blob, tries = 2) {
+  for (let attempt = 1; ; attempt++) {
+    const fd = new FormData(); fd.append("audio", blob, "part.wav");
+    const res = await fetch(`/api/session/${SID}/recording-chunk`, { method: "POST", body: fd }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (d.ok) return d.text;
+    if (attempt >= tries) throw new Error(d.error || "The server did not answer");
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+$("upRec").addEventListener("click", async () => {
+  const file = $("recFile").files[0], say = m => { $("recState").textContent = m; };
+  if (!file) { say("Choose a file first"); return; }
+  if (file.size > MAX_FILE) { say("The file is too large for the browser (up to about 500 MB). Cut it or export only the audio."); return; }
+  $("upRec").disabled = true; $("recBar").style.width = "0";
+  try {
+    say("Reading the sound from the file…");
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await ctx.decodeAudioData(await file.arrayBuffer());
+    ctx.close();
+    const frames = Math.ceil(decoded.duration * RATE);
+    const off = new OfflineAudioContext(1, frames, RATE);
+    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+    const mono = (await off.startRendering()).getChannelData(0);
+    const size = PART_SECONDS * RATE, parts = Math.ceil(mono.length / size), texts = [];
+    for (let i = 0; i < parts; i++) {
+      say(`Transcribing part ${i + 1} of ${parts}…`);
+      texts.push((await sendPart(wavBlob(mono.subarray(i * size, (i + 1) * size)))).trim());
+      $("recBar").style.width = (100 * (i + 1) / parts) + "%";
+    }
+    if ($("keepRec").checked) {
+      say("Saving the recording for students…");
+      const fd = new FormData(); fd.append("file", file, file.name);
+      const kept = await fetch(`/api/session/${SID}/recording-file`, { method: "POST", body: fd }).then(r => r.json()).catch(() => ({ ok: false }));
+      $("keptRec").textContent = kept.ok ? "A recording is saved: " + kept.name : "The recording was not saved: " + (kept.error || "error");
+    }
+    segments = [];
+    $("raw").value = texts.filter(Boolean).join("\n");
+    $("raw").closest("details").open = true;
+    say(`Done: ${parts} parts. Producing the transcript…`);
+    $("fix").click();
+  } catch (e) {
+    say("Failed: " + (e.message || e) + ". Parts already transcribed are not kept; try again.");
+  } finally { $("upRec").disabled = false; }
+});
+
+if ($("delRec")) $("delRec").onclick = async e => { e.preventDefault(); await fetch(`/api/session/${SID}/recording-file`, { method: "DELETE" }); $("keptRec").textContent = "The recording was removed."; };
+$("keepOnly").addEventListener("click", async () => {
+  const file = $("recFile").files[0];
+  if (!file) { $("recState").textContent = "Choose a file first"; return; }
+  $("recState").textContent = "Saving the recording for students…"; $("keepOnly").disabled = true;
+  const fd = new FormData(); fd.append("file", file, file.name);
+  const kept = await fetch(`/api/session/${SID}/recording-file`, { method: "POST", body: fd }).then(r => r.json()).catch(() => ({ ok: false }));
+  $("keepOnly").disabled = false;
+  $("recState").textContent = "";
+  $("keptRec").textContent = kept.ok ? "A recording is saved: " + kept.name : "The recording was not saved: " + (kept.error || "error");
+});
+$("thr").addEventListener("input", () => { updateMark(); renderLive(); });
+updateMark();
+
+const postJson = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  .then(r => r.json()).catch(() => ({ ok: false, error: "The server did not answer" }));
+function parts(text, size = 5000) {
+  const out = []; let cur = "";
+  for (const para of text.split(/\n+/)) {
+    if (cur && (cur + "\n" + para).length > size) { out.push(cur); cur = ""; }
+    cur = cur ? cur + "\n" + para : para;
+    while (cur.length > size * 1.5) { const cut = cur.lastIndexOf(" ", size); const at = cut > 0 ? cut : size; out.push(cur.slice(0, at)); cur = cur.slice(at).trim(); }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+$("aiFix").addEventListener("click", async () => {
+  const chunks = parts($("corrected").value.trim()); if (!chunks.length) return;
+  $("aiFix").disabled = true; const done = [];
+  for (let i = 0; i < chunks.length; i++) {
+    $("fixState").textContent = `Repairing part ${i + 1} of ${chunks.length}…`;
+    const d = await postJson(`/api/session/${SID}/transcript/ai-fix`, { text: chunks[i] });
+    if (!d.ok) { $("fixState").textContent = "Failed: " + (d.error || "error") + ". Nothing was changed."; $("aiFix").disabled = false; return; }
+    done.push(d.text);
+  }
+  $("corrected").value = done.join("\n");
+  const s = await postJson(`/api/session/${SID}/transcript/save`, { text: $("corrected").value });
+  $("fixState").textContent = s.ok ? "Repaired and saved. Read it through before you publish." : "Repaired, but saving failed";
+  $("aiFix").disabled = false;
+});
+$("saveText").addEventListener("click", async () => {
+  const s = await postJson(`/api/session/${SID}/transcript/save`, { text: $("corrected").value });
+  $("fixState").textContent = s.ok ? "Saved" : (s.error || "Error");
+});
+$("aiSumBtn").addEventListener("click", async () => {
+  $("sumState").textContent = "Writing the summary… this can take up to a minute"; $("aiSumBtn").disabled = true;
+  await postJson(`/api/session/${SID}/transcript/save`, { text: $("corrected").value });
+  const d = await postJson(`/api/session/${SID}/ai-summary`, {});
+  $("sumState").textContent = d.ok ? "Draft ready: check it and press Save the summary" : "Failed: " + (d.error || "error");
+  if (d.ok) $("aiSum").value = d.text;
+  $("aiSumBtn").disabled = false;
+});
+$("saveSum").addEventListener("click", async () => {
+  const d = await postJson(`/api/session/${SID}/summary/text`, { text: $("aiSum").value });
+  $("sumState").textContent = d.ok ? "Saved" : "Error";
+});
+
+const excluded = new Set();
+document.addEventListener("click", e => { if (e.target.id === "resetEx") { e.preventDefault(); excluded.clear(); $("fix").click(); } });
+$("fixes").addEventListener("click", e => {
+  const b = e.target.closest("button.undo"); if (!b) return;
+  excluded.add(b.dataset.term.toLowerCase());
+  $("fix").click();
+});
+$("fix").addEventListener("click", async () => {
+  const res = await fetch(`/api/session/${SID}/transcript`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw: $("raw").value, segments, threshold: threshold(),
+                           glossary: $("glossary").value, defaults: false, exclude: [...excluded] }) });
+  if (!res.ok) { $("state").textContent = "Error producing the transcript"; return; }
+  const d = await res.json();
+  $("result").hidden = false;
+  $("corrected").value = d.corrected;
+  $("fixes").innerHTML = (d.fixes.length ? "English terms corrected: " + d.fixes.length + " (click a correction that is wrong to undo it) " : "No terms needed correcting. ")
+    + (excluded.size ? `<br><small>Rejected terms: ${[...excluded].map(esc).join(", ")} <a href="#" id="resetEx">use them again</a></small><br>` : "")
+    + d.fixes.map(f => `<button type="button" class="fix undo" data-term="${esc(f.term)}" title="Wrong correction? Click to stop using this term and produce the transcript again">${esc(f.heard)} ← ${esc(f.term)} ✕</button>`).join("")
+    + (d.questions ? `<br>Student questions included: ${d.questions}` : "")
+    + (d.missing.length ? "<br>Listed terms that did not appear: " + d.missing.map(m => `<span class="fix miss">${esc(m)}</span>`).join("") : "");
+  $("dropped").innerHTML = d.dropped.length
+    ? "Removed (not the lecturer's voice): " + d.dropped.map(x => `<span class="fix drop" title="${esc(x.reason)}">${esc(x.text)}</span>`).join("")
+    : "";
+});
+</script>
+{% endblock %}

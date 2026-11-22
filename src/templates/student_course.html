@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ course.name }}{% endblock %}
+{% block head %}<style>
+  .sec { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 6px; }
+  textarea { width:100%; min-height: 90px; font-size:1rem; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  .sum li { margin-bottom: 6px; } #msgOut { margin-top: 8px; }
+</style>{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <p><a href="/my">← My courses</a></p>
+  <h1>{{ course.name }}</h1>
+  {% if live %}
+  <div class="sec"><h3>There is an active lecture now</h3>
+    <a class="btn full" href="/live/{{ live.session_id }}">Join the lecture and send live notes</a></div>
+  {% endif %}
+  <div class="sec"><h3>Write to the lecturer</h3>
+    <textarea id="msg" maxlength="500" placeholder="A question, request or comment for the lecturer"></textarea>
+    <button class="full" id="send">Send</button><div id="msgOut"></div></div>
+  <div class="sec"><h3>Homework</h3>
+    {% for a in assignments %}<div style="margin-bottom:12px"><a href="/homework?assignment={{ a.id }}">{{ a.title }}</a>
+      {% if a.submitted %}<span class="muted"> · Submitted <span class="when" data-ts="{{ a.at }}"></span>{% if a.filename %} ({{ a.filename }}){% endif %}</span>
+      <details><summary>View my submission</summary>
+      {% if a.has_file %}<p><a href="/api/homework/{{ a.id }}/my-file" target="_blank">Open the file I uploaded</a></p>{% endif %}<pre style="white-space:pre-wrap;unicode-bidi:plaintext">{{ a.text }}</pre>
+      <a href="/homework?assignment={{ a.id }}">Submit again to replace it</a></details>
+      {% else %}<span class="muted"> · Not submitted yet</span>{% endif %}</div>
+    {% else %}<p class="muted">No open assignments.</p>{% endfor %}</div>
+  <div class="sec"><h3>Lecture summaries</h3><div id="sums" class="muted">Loading…</div></div>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+document.querySelectorAll(".when").forEach(e => { e.textContent = new Date(Number(e.dataset.ts)).toLocaleString("en-GB"); });
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+$("send").onclick = async () => {
+  const res = await fetch("/api/course/{{ course.course_id }}/message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text: $("msg").value }) });
+  const d = await res.json().catch(() => ({}));
+  $("msgOut").textContent = d.ok ? "Message sent to the lecturer" : (d.error || "Error"); if (d.ok) $("msg").value = "";
+};
+(async () => {
+  const items = await (await fetch("/api/course/{{ course.course_id }}/summaries")).json();
+  $("sums").innerHTML = items.length ? items.map(s => `<div class="sum"><b>${new Date(s.started_at * 1000).toLocaleDateString("en-GB")}</b>
+    ${s.ai_text ? `<pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.ai_text)}</pre>`
+      : `${s.terms.length ? `<p class="muted">Key terms: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`}${s.recording ? `<p>${s.video ? `<video controls preload="none" style="width:100%;border-radius:10px" src="${s.recording}"></video>` : `<audio controls preload="none" style="width:100%" src="${s.recording}"></audio>`}</p>` : ""}${s.transcript ? `<details><summary>Full transcript</summary><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.transcript)}</pre></details>` : ""}</div>`).join("")
+    + '<p class="muted" style="font-size:.85rem">Summary prepared from the lecture transcript. Not a substitute for attending the lecture.</p>'
+    : "The lecturer has not published any summaries yet.";
+})();
+</script>
+{% endblock %}

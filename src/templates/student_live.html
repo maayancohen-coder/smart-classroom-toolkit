@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ course.name }} · Lecture{% endblock %}
+{% block head %}<style>
+  textarea { width:100%; min-height: 90px; font-size:1rem; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  .note { padding:8px 10px; margin-top:8px; background:var(--bg); border-radius:10px; }
+</style>{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <p><a href="/course/{{ course.course_id }}">← {{ course.name }}</a></p>
+  <h1>Notes during the lecture</h1>
+  <p class="muted">Notes reach the lecturer immediately. Do not send personal information.</p>
+  <textarea id="text" maxlength="500" placeholder="A note, a question, or something you did not understand"></textarea>
+  <label style="font-weight:400"><input type="checkbox" id="anon" style="width:auto"> Send anonymously</label>
+  <button class="full" id="send">Send</button>
+  <p id="out" class="muted"></p>
+  <h3>Notes I sent</h3><div id="mine"></div>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function mine() {
+  const r = await fetch("/api/session/{{ session.session_id }}/my-notes"); if (!r.ok) return;
+  $("mine").innerHTML = (await r.json()).slice().reverse().map(n => `<div class="note">${esc(n.text)}</div>`).join("");
+}
+$("send").onclick = async () => {
+  const res = await fetch("/api/session/{{ session.session_id }}/note", { method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ text: $("text").value, anonymous: $("anon").checked }) });
+  const d = await res.json().catch(() => ({}));
+  $("out").textContent = d.ok ? "Sent" : (d.error || "Error"); if (d.ok) { $("text").value = ""; mine(); }
+};
+mine();
+</script>
+{% endblock %}

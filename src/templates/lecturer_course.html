@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ course.name }}{% endblock %}
+{% block head %}<style>
+  .page { max-width: 760px; margin: 0 auto; padding: 24px 16px; } .card { margin-bottom: 16px; }
+  .item { padding: 10px 0; border-bottom: 1px solid var(--line); } small { color: var(--muted); }
+  pre { white-space: pre-wrap; background: var(--bg); padding: 10px; border-radius: 10px; }
+</style>{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="card"><p><a href="/lecturer">← Lecturer area</a></p><h1>{{ course.name }}</h1>
+    <a class="btn secondary" href="/lecturer/homework">Homework</a></div>
+  <div class="card"><h2>Messages from students</h2><div id="inbox" class="muted">Loading…</div></div>
+  <div class="card"><h2>Lectures</h2><div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <label style="font-weight:400">Add a lecture that already took place: <input type="date" id="pastDate" style="width:auto"></label>
+      <button class="secondary" id="pastBtn">Add and upload its recording</button> <small id="pastOut"></small></div>
+    <div id="lectures" class="muted">Loading…</div><div id="sum"></div></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cid = "{{ course.course_id }}";
+async function inbox() {
+  const items = await (await fetch(`/api/course/${cid}/inbox`)).json();
+  $("inbox").innerHTML = items.length ? items.map(m => `<div class="item"><b>${esc(m.name)}</b> <small>${new Date(m.at*1000).toLocaleString("en-GB")}</small><br>${esc(m.text)}</div>`).join("") : "No messages.";
+}
+async function lectures() {
+  const items = await (await fetch(`/api/course/${cid}/lectures`)).json();
+  $("lectures").innerHTML = items.length ? items.map(l => `<div class="item">${new Date(l.started_at*1000).toLocaleString("en-GB")}
+    · ${l.present ? l.present + " present" : "no attendance"} · ${l.closed ? "Ended" : "<b>Active</b>"}
+    ${l.closed ? "" : `<a href="/lecturer/${l.id}">Lecture screen</a>`}
+    <a href="/lecturer/${l.id}/transcript">Recording &amp; transcript</a>
+    ${l.has_transcript ? `<button class="secondary" onclick="show('${l.id}')">Summary</button>
+      <button class="secondary" onclick="pub('${l.id}', ${!l.published})">${l.published ? "Hide from students" : "Publish to students"}</button>` : "<small>No transcript</small>"}</div>`).join("") : "No lectures have been opened in this course yet.";
+}
+async function show(id) {
+  const s = await (await fetch(`/api/session/${id}/summary`)).json();
+  $("sum").innerHTML = s.ai_text
+    ? `<h3>Summary ${s.published ? "(published)" : "(not published)"}</h3><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.ai_text)}</pre>`
+    : `<h3>Automatic summary ${s.published ? "(published)" : "(not published)"}</h3><p><small>Key terms: ${esc(s.terms.join(", "))}</small></p><ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+}
+async function pub(id, value) {
+  await fetch(`/api/session/${id}/summary/publish`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ published: value }) });
+  lectures();
+}
+$("pastBtn").onclick = async () => {
+  const r = await fetch(`/api/course/${cid}/past-lecture`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ date: $("pastDate").value }) });
+  const d = await r.json(); if (d.ok) location.href = d.url; else $("pastOut").textContent = d.error || "Error";
+};
+inbox(); lectures(); setInterval(inbox, 10000);
+</script>
+{% endblock %}

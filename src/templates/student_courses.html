@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}My page{% endblock %}
+{% block who %}{{ student.name }} · <a href="/logout">Log out</a>{% endblock %}
+{% block body %}
+<section class="hero"><h1>Hello {{ student.name.split()[0] }}</h1><p>What would you like to do?</p></section>
+<nav class="tiles">
+  <a class="tile" href="/attend"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 12h8"/></svg></div>
+    <h2>Mark attendance</h2><p>{% if live_count %}{{ live_count }} active lecture(s) right now. Scan the QR code.{% else %}Pick a course and scan the QR code on the lecturer's screen.{% endif %}</p></a>
+  <a class="tile" href="/homework"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>
+    <h2>Homework</h2><p>Submit an assignment by course and check it against the course material.</p></a>
+</nav>
+<div class="section"><h3>My courses</h3>
+  <div class="list">
+  {% for c in courses %}<a class="row" href="/course/{{ c.id }}"><b>{{ c.name }}</b>
+    {% if c.live %}<span class="pill live">Active lecture</span>{% else %}<span class="pill idle">No lecture</span>{% endif %}</a>
+  {% else %}<div class="row">You have no courses.</div>{% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Submit assignment{% endblock %}
+{% block head %}<style>
+  select { width: 100%; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); }
+  textarea { width: 100%; min-height: 110px; font-size: 1rem; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .res { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--bg); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+</style>{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <h1>Submit assignment</h1>
+  <p class="muted">Your submission is compared with the lecturer's solution and with other students' submissions for the same assignment. You can submit again; the last submission is kept.</p>
+  <label for="course">Course</label><select id="course"></select>
+  <label for="asg">Assignment</label><select id="asg"></select>
+  <label for="sid">Student number</label><input id="sid" inputmode="numeric" autocomplete="off" value="{{ student_id }}">
+  <label for="pin">Personal PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+  <label>Solution file (PDF or image, handwriting allowed)</label><input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.pptx">
+  <label for="text">Or paste the solution</label><textarea id="text"></textarea>
+  <button class="secondary full" id="check">Check against the course material (not saved)</button>
+  <button class="secondary full" id="llmCheck">AI review of my answer (course material only)</button>
+  <button class="full" id="send">Submit</button>
+  <div id="out"></div>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let data = [];
+async function init() {
+  data = await (await fetch("/api/homework/courses")).json();
+  $("course").innerHTML = data.length ? data.map((c, i) => `<option value="${i}">${esc(c.course)}</option>`).join("") : "<option>No open assignments</option>";
+  fill();
+  const want = "{{ pick }}";
+  if (want) data.forEach((c, i) => { if (c.assignments.some(a => a.id === want)) { $("course").value = i; fill(); $("asg").value = want; } });
+}
+function fill() { const c = data[$("course").value]; $("asg").innerHTML = c ? c.assignments.map(a => `<option value="${a.id}">${esc(a.title)}</option>`).join("") : ""; }
+$("course").onchange = fill;
+function form() {
+  const fd = new FormData(); const f = $("file").files[0];
+  if (f) fd.append("file", f); else fd.append("file_text", $("text").value);
+  return fd;
+}
+async function post(url, fd, btn) {
+  $("out").innerHTML = '<div class="res">Sending… (a scanned or handwritten file can take up to a minute)</div>';
+  btn.disabled = true;
+  try { const res = await fetch(url, { method: "POST", body: fd }); return await res.json(); }
+  catch (e) { return { ok: false, error: "Network problem" }; } finally { btn.disabled = false; }
+}
+$("check").onclick = async () => {
+  if (!$("asg").value) return;
+  const d = await post(`/api/homework/${$("asg").value}/check`, form(), $("check"));
+  if (!d.ok) { $("out").innerHTML = `<div class="res bad">${esc(d.error)}</div>`; return; }
+  $("out").innerHTML = `<div class="res"><b>Course terms used: ${d.coverage}%</b> (${d.used} of ${d.key_terms})<br>
+    ${d.missing.length ? "Course terms that did not appear: " + esc(d.missing.join(", ")) + "<br>" : ""}
+    ${d.outside.length ? "English terms not found in the course material: " + esc(d.outside.join(", ")) : "All English terms appear in the course material."}
+    <details><summary>Text read from the file</summary><pre style="white-space:pre-wrap">${esc(d.text)}</pre></details>
+    <p class="muted">This is only a hint, not a grade. The check is not saved and not sent to the lecturer.</p></div>`;
+};
+$("llmCheck").onclick = async () => {
+  if (!$("asg").value) return;
+  const d = await post(`/api/homework/${$("asg").value}/llm-check`, form(), $("llmCheck"));
+  if (!d.ok) { $("out").innerHTML = `<div class="res bad">${esc(d.error)}</div>`; return; }
+  show(d);
+};
+function show(d) {
+  const sim = d.similarity || {};
+  const classLine = !d.comparison_allowed ? "The lecturer turned off the comparison with the class for this assignment."
+    : !sim.enough ? `Not enough submissions yet for an anonymous comparison (${sim.others || 0} so far, at least 3 are needed).`
+    : `Similarity to the closest answer in the class: <b>${esc(sim.level)}</b> (${sim.percent}%).` + (sim.level === "high" ? " Make sure the work is your own." : "");
+  $("out").innerHTML = `<div class="res"><b>AI review</b><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext">${esc(d.review)}</pre>
+    <p>${classLine}</p>
+    <p class="muted">A suggestion only, not a grade. ${d.compared ? "The comparison with the class is anonymous: no one else's text or name is shown. " : ""}Your text was sent to an external AI service.</p></div>`;
+}
+document.addEventListener("click", async e => {
+  if (e.target.id !== "fb") return;
+  e.target.disabled = true; e.target.textContent = "Reviewing… this can take up to a minute";
+  const res = await fetch(`/api/homework/${$("asg").value}/my-feedback`, { method: "POST" });
+  const d = await res.json().catch(() => ({ ok: false, error: "Network problem" }));
+  if (d.ok) show(d); else { e.target.disabled = false; e.target.textContent = "Get AI feedback on my submission"; $("out").insertAdjacentHTML("beforeend", `<div class="res bad">${esc(d.error)}</div>`); }
+});
+$("send").onclick = async () => {
+  if (!$("asg").value) return;
+  const fd = form(); fd.append("student_id", $("sid").value); fd.append("pin", $("pin").value);
+  const d = await post(`/api/homework/${$("asg").value}/submit`, fd, $("send"));
+  $("out").innerHTML = d.ok ? `<div class="res ok">${esc(d.name)}, your submission was received${d.replaced ? " (replaced an earlier submission)" : ""}.
+      <p><button class="secondary" id="fb">Get AI feedback on my submission</button></p></div>`
+                            : `<div class="res bad">${esc(d.error)}</div>`;
+};
+init();
+</script>
+{% endblock %}

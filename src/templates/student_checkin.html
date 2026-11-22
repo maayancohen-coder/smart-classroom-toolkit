@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Mark attendance{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card" id="card">
+  <h1>{{ course }}</h1>
+  <p class="muted" id="status">Mark attendance</p>
+
+  <div id="idBox" {% if known_name %}hidden{% endif %}>
+    <label for="sid">Student number</label>
+    <input id="sid" inputmode="numeric" autocomplete="off" placeholder="e.g. 100000001">
+    <p class="muted" style="font-size:.9rem">Only once. This phone will be linked to you.</p>
+  </div>
+  {% if known_name %}<p style="font-size:1.15rem">Hello <strong>{{ known_name }}</strong></p>{% endif %}
+
+  <label for="pin">Personal PIN (4-6 digits)</label>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="••••">
+  <p class="muted" style="font-size:.9rem">The first time, pick a PIN and remember it. You will enter it again at every check-in.</p>
+
+  <button class="full" id="go">Mark attendance</button>
+  <p id="msg" role="status"></p>
+  <p class="muted" style="font-size:.75rem">Device: {{ device_tag }} · {{ "new" if device_new else "known" }}</p>
+</div></div>
+
+<script>
+const NONCE = {{ nonce|tojson }};
+const NEEDS_LOCATION = {{ needs_location|tojson }};
+const KNOWN = {{ (known_name is not none)|tojson }};
+const $ = id => document.getElementById(id);
+
+// Collect a few GPS readings (the server uses them for the geofence and for spoofing checks).
+function collectLocation(maxMs = 12000, wanted = 3) {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve({ samples: [], denied: true });
+    const samples = [];
+    let finished = false;
+    const done = denied => {
+      if (finished) return;
+      finished = true;
+      navigator.geolocation.clearWatch(watchId);
+      resolve({ samples, denied: denied && samples.length === 0 });
+    };
+    const watchId = navigator.geolocation.watchPosition(
+      p => {
+        samples.push({ lat: p.coords.latitude, lng: p.coords.longitude,
+                       accuracy: p.coords.accuracy, ts: p.timestamp / 1000 });
+        // Stop early once the fix is good (<=20 m) and we have enough readings; otherwise keep refining.
+        if (samples.length >= wanted && (p.coords.accuracy <= 20 || samples.length >= 8)) done(false);
+      },
+      () => done(true),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: maxMs });
+    setTimeout(() => done(samples.length === 0), maxMs);
+  });
+}
+
+async function fingerprint() {
+  // Not a secret and not unique to a person: it only lets the server notice the SAME phone under
+  // two names, which a private window cannot hide (the settings below do not change).
+  const parts = [navigator.userAgent, navigator.language, screen.width + "x" + screen.height,
+    screen.colorDepth, devicePixelRatio, navigator.hardwareConcurrency || "", navigator.platform || "",
+    Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.maxTouchPoints || 0].join("|");
+  try {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts));
+    return Array.from(new Uint8Array(buf)).slice(0, 12).map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) { return ""; }
+}
+
+$("go").addEventListener("click", async () => {
+  const msg = $("msg"), btn = $("go");
+  const sid = $("sid") ? $("sid").value.trim() : "";
+  if (!KNOWN && !sid) { msg.textContent = "Enter your student number"; return; }
+  const pin = $("pin").value.trim();
+  if (!/^\d{4,6}$/.test(pin)) { msg.textContent = "Enter a personal PIN of 4 to 6 digits"; return; }
+  btn.disabled = true;
+  msg.textContent = NEEDS_LOCATION ? "Checking location… (allow location access)" : "Sending…";
+  const loc = NEEDS_LOCATION ? await collectLocation() : { samples: [], denied: false };
+  const fp = await fingerprint();
+  try {
+    const res = await fetch("/api/checkin", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nonce: NONCE, student_id: sid, pin, samples: loc.samples, denied: loc.denied,
+                             fp, client_now: Date.now() / 1000 })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      $("card").innerHTML = '<h1>✓ Attendance recorded</h1><p>' + data.name +
+        (data.duplicate ? '<br><span class="muted">You were already marked in this lecture.</span>' : '') + '</p>';
+    } else {
+      msg.textContent = data.error; btn.disabled = false;
+    }
+  } catch (e) {
+    msg.textContent = "Network error, try again"; btn.disabled = false;
+  }
+});
+</script>
+{% endblock %}

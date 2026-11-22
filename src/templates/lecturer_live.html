@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}{{ session.course }}{% endblock %}
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  .layout { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 20px;
+    max-width: 1200px; margin: 0 auto; padding: 20px; align-items: start; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  #qr img { width: 100%; height: auto; image-rendering: pixelated; border-radius: 8px; background: #fff; padding: 8px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+  .bar > div { height: 100%; background: var(--accent); width: 100%; }
+  .counts { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pill { padding: 6px 12px; border-radius: 999px; font-weight: 700; }
+  .pill.present { background: var(--ok-bg); color: var(--ok); }
+  .pill.suspect { background: var(--warn-bg); color: var(--warn); }
+  .pill.absent { background: var(--bad-bg); color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  td.notes { color: var(--muted); font-size: .9rem; }
+  .tag { padding: 2px 10px; border-radius: 999px; font-size: .85rem; font-weight: 700; white-space: nowrap; }
+  .tag.present { background: var(--ok-bg); color: var(--ok); }
+  .tag.suspect { background: var(--warn-bg); color: var(--warn); }
+  .tag.absent { background: var(--bad-bg); color: var(--bad); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .actions .btn, .actions button { font-size: .95rem; padding: 9px 14px; }
+  tr.hl td { background: var(--warn-bg); }
+  .hc { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .hc h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  .hc .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .hc .row[hidden] { display: none; }
+  .hc input[type=number] { width: 90px; }
+  .gapbox { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--line); line-height: 1.5; }
+  .gapbox.gap { background: var(--warn-bg); color: var(--warn); }
+  .gapbox.ok { background: var(--ok-bg); color: var(--ok); }
+</style>
+{% endblock %}
+{% block body %}
+<div class="layout">
+  <div class="card">
+    <h1>{{ session.course }}</h1>
+    <p class="muted" id="hint">Scan the code to mark attendance</p>
+    <div id="qr"></div>
+    <div class="bar"><div id="timer"></div></div>
+    <div class="actions">
+      <a class="btn secondary" href="/api/session/{{ session.session_id }}/report.xlsx">Excel</a>
+      <a class="btn secondary" href="/api/session/{{ session.session_id }}/report.csv">CSV</a>
+      <a class="btn secondary" href="/lecturer/{{ session.session_id }}/transcript">Transcript</a>
+      <button class="secondary" id="close">Close lecture</button>
+    </div>
+    <div class="hc">
+      <h2>Head count from a photo</h2>
+      <p class="muted" style="font-size:.9rem;margin:0">Take a photo of the class. The system only counts people, does not recognize faces, and deletes the photo right after counting.</p>
+      <div class="row" id="photoRow">
+        <input type="file" id="photo" accept="image/*" capture="environment">
+        <button id="countBtn" type="button">Count from the photo</button>
+      </div>
+      <div class="row">
+        <label for="manual" style="margin:0">Or enter by hand:</label>
+        <input type="number" id="manual" min="0">
+        <button class="secondary" id="manualBtn" type="button">Update</button>
+      </div>
+      <p id="hcMsg" class="muted" style="font-size:.9rem"></p>
+      <div id="gapbox" class="gapbox" hidden></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="counts" id="counts"></div>
+    <table>
+      <thead><tr><th>Status</th><th>Name</th><th>Time</th><th>Distance</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2 style="font-size:1.1rem;margin:0 0 8px">Live notes from students</h2>
+    <div id="notes" class="muted">No notes yet.</div>
+  </div>
+</div>
+
+<script>
+const SID = {{ session.session_id|tojson }};
+const PERIOD = {{ period }};
+const LABEL = { present: "Present", suspect: "Suspect", absent: "Absent" };
+const $ = id => document.getElementById(id);
+let lastUrl = null, expiresAt = 0;
+let highlighted = new Set();
+let lastNote = 0;
+async function refreshNotes() {
+  const res = await fetch(`/api/session/${SID}/notes?after=${lastNote}`);
+  if (!res.ok) return;
+  const items = await res.json();
+  if (!items.length) return;
+  const box = $("notes");
+  if (!lastNote) box.textContent = "";
+  for (const n of items) {
+    lastNote = Math.max(lastNote, n.id);
+    const row = document.createElement("div");
+    row.style.cssText = "padding:8px 0;border-bottom:1px solid var(--line)";
+    const who = document.createElement("b"); who.textContent = n.name + ": ";
+    row.append(who, document.createTextNode(n.text));
+    box.prepend(row);
+  }
+}
+setInterval(refreshNotes, 4000); refreshNotes();
+
+async function refreshQr() {
+  const res = await fetch(`/api/session/${SID}/qr`);
+  if (!res.ok) return;
+  const d = await res.json();
+  expiresAt = Date.now() + d.expires_in * 1000;
+  if (d.closed) { $("qr").innerHTML = ""; $("hint").textContent = "The lecture is closed"; return; }
+  if (d.url !== lastUrl) {
+    lastUrl = d.url;
+    const qr = qrcode(0, "M"); qr.addData(d.url); qr.make();
+    $("qr").innerHTML = qr.createImgTag(8, 2);
+  }
+}
+function tick() {
+  const left = Math.max(0, expiresAt - Date.now());
+  $("timer").style.width = (left / (PERIOD * 1000) * 100) + "%";
+  if (left <= 0) refreshQr();
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function refreshReport() {
+  const res = await fetch(`/api/session/${SID}/report`);
+  if (!res.ok) return;
+  const d = await res.json();
+  $("counts").innerHTML = ["present", "suspect", "absent"]
+    .map(k => `<span class="pill ${k}">${LABEL[k]}: ${d.counts[k]}</span>`).join("");
+  showGap(d.headcount);
+  $("photoRow").hidden = !d.can_count_photo;
+  highlighted = new Set(d.headcount ? d.headcount.highlight_ids : []);
+  $("rows").innerHTML = d.rows.map(r => {
+    const t = r.time ? new Date(r.time * 1000).toLocaleTimeString("he-IL") : "";
+    return `<tr class="${highlighted.has(r.student_id) ? "hl" : ""}"><td><span class="tag ${r.status}">${LABEL[r.status]}</span></td>
+      <td>${esc(r.name)}</td><td>${t}</td><td>${r.distance_m != null ? r.distance_m + " m" : ""}</td>
+      <td class="notes">${esc(r.notes)}</td>
+      <td>${r.approved ? `<button class="secondary" data-approve="0" data-sid="${esc(r.student_id)}">Undo approval</button>`
+          : r.status === "suspect" ? `<button class="secondary" data-approve="1" data-sid="${esc(r.student_id)}">Approve attendance</button>` : ""}</td></tr>`;
+  }).join("");
+}
+$("rows").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-sid]");
+  if (!b) return;
+  b.disabled = true;
+  await fetch(`/api/session/${SID}/approve`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_id: b.dataset.sid, approved: b.dataset.approve === "1" }) });
+  refreshReport();
+});
+const VERDICT = {
+  ok: "The gap is within the expected range.",
+  gap: "Unusual gap: some of the people who checked in may not have been in the room. Those with the most suspicious signs are marked in yellow.",
+  more_counted: "More people were counted than checked in (for example students who did not check in, or the lecturer)."
+};
+function showGap(h) {
+  const box = $("gapbox");
+  if (!h) { box.hidden = true; return; }
+  box.hidden = false;
+  box.className = "gapbox " + (h.verdict === "gap" ? "gap" : h.verdict === "ok" ? "ok" : "");
+  const how = h.method === "manual" ? "Entered by hand" : "Counted from a photo" + (h.confidence ? ` (confidence: ${esc(h.confidence)})` : "");
+  box.innerHTML = `Counted in the room: <b>${h.counted}</b> · Checked in: <b>${h.checkins}</b> · Gap: <b>${h.gap}</b>` +
+    ` (allowed up to ${h.allowed})<br>${VERDICT[h.verdict]}<br><span class="muted">${how}${h.note ? " · " + esc(h.note) : ""}</span>`;
+}
+// Shrink the photo in the browser first: faster upload, and a phone photo can be several MB.
+async function shrink(file, maxSide = 1600) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * k); canvas.height = Math.round(bmp.height * k);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  return new Promise(res => canvas.toBlob(res, "image/jpeg", 0.85));
+}
+async function sendHeadcount(body) {
+  $("hcMsg").textContent = "Counting… this can take up to two minutes";
+  const res = await fetch(`/api/session/${SID}/headcount`, { method: "POST", body });
+  const d = await res.json().catch(() => ({}));
+  $("hcMsg").textContent = res.ok ? "" : (d.error || "Error");
+  refreshReport();
+}
+$("countBtn").onclick = async () => {
+  const f = $("photo").files[0];
+  if (!f) { $("hcMsg").textContent = "Choose a photo"; return; }
+  const form = new FormData();
+  form.append("photo", await shrink(f), "class.jpg");
+  sendHeadcount(form);
+};
+$("manualBtn").onclick = () => {
+  const v = $("manual").value;
+  if (v === "") { $("hcMsg").textContent = "Enter a number"; return; }
+  const form = new FormData(); form.append("count", v);
+  sendHeadcount(form);
+};
+$("close").onclick = async () => {
+  if (!confirm("Close the lecture? Attendance can no longer be marked.")) return;
+  await fetch(`/api/session/${SID}/close`, { method: "POST" });
+  refreshQr();
+};
+refreshQr(); refreshReport();
+setInterval(tick, 100);
+setInterval(refreshReport, 2000);
+</script>
+{% endblock %}
