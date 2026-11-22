@@ -45,10 +45,11 @@ def _call(request: urllib.request.Request, timeout: float, waits: tuple = RETRY_
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            if exc.code in RETRY_CODES and attempt < len(waits):
+            detail = exc.read().decode("utf-8", errors="replace")[:300]
+            quota = exc.code == 429 and "quota" in detail.lower()     # a spent quota does not recover in seconds
+            if exc.code in RETRY_CODES and not quota and attempt < len(waits):
                 time.sleep(waits[attempt])
                 continue
-            detail = exc.read().decode("utf-8", errors="replace")[:300]
             raise HandwritingError(f"The reading service returned error {exc.code}: {detail}") from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
             raise HandwritingError(f"Could not reach the reading service ({type(exc).__name__}: {str(exc)[:150]})") from exc
