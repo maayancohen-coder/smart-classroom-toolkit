@@ -51,6 +51,7 @@ class Config:
     # Free alternative: Google Gemini. Create a key in Google AI Studio and check the current model name there.
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+    GEMINI_THINKING = os.environ.get("GEMINI_THINKING", "low")      # "low" or "" (empty = do not send a thinking setting)
     # Counting a crowded photo can take a while with a "thinking" model.
     COUNTER_TIMEOUT_SECONDS = float(os.environ.get("COUNTER_TIMEOUT_SECONDS", 110))
 

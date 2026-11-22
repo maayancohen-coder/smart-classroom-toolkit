@@ -22,7 +22,7 @@ from attendance.terms import DEFAULT_TERMS
 from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
-from attendance.handwriting import HandwritingError, build_transcriber
+from attendance.handwriting import GeminiTranscriber, HandwritingError, build_transcriber
 from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_common_mistakes_prompt, build_review_prompt,
                                  class_similarity, content_check)
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
@@ -704,17 +704,27 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
 
     @app.get("/api/ai-status")
     def api_ai_status():
-        """Lecturer: a one-line live test of the AI service (key, model, answer time, exact error)."""
+        """Lecturer: a live test of the AI service. Optional ?model=...&thinking=low|off to try another setting."""
         require_lecturer()
         reader = app.extensions["transcriber"]
         if reader is None:
             return jsonify(ok=False, error="No key: GEMINI_API_KEY is not set on the server")
+        model = (request.args.get("model") or "").strip()
+        if reader.name == "gemini" and (model or request.args.get("thinking")):
+            thinking = "" if request.args.get("thinking") == "off" else (request.args.get("thinking") or reader.thinking)
+            reader = GeminiTranscriber(reader.api_key, model or reader.model, 30.0, thinking)
+        info = {"service": reader.name, "model": getattr(reader, "model", ""), "thinking": getattr(reader, "thinking", "")}
+        if hasattr(reader, "list_models") and request.args.get("models"):
+            try:
+                return jsonify(ok=True, models=reader.list_models(), **info)
+            except HandwritingError as exc:
+                return jsonify(ok=False, error=str(exc), **info)
         started = time.time()
         try:
             answer = reader.complete("Reply with the single word OK.")
-            return jsonify(ok=True, service=reader.name, model=getattr(reader, "model", ""), seconds=round(time.time() - started, 1), answer=answer[:40])
+            return jsonify(ok=True, seconds=round(time.time() - started, 1), answer=answer[:40], **info)
         except HandwritingError as exc:
-            return jsonify(ok=False, service=reader.name, model=getattr(reader, "model", ""), seconds=round(time.time() - started, 1), error=str(exc))
+            return jsonify(ok=False, seconds=round(time.time() - started, 1), error=str(exc), **info)
 
     @app.post("/api/homework/<assignment_id>/review/<student_id>")
     def api_homework_review(assignment_id, student_id):

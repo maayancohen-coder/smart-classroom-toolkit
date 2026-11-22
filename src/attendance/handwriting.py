@@ -58,12 +58,20 @@ def _call(request: urllib.request.Request, timeout: float, waits: tuple = RETRY_
 class GeminiTranscriber(Transcriber):
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str, timeout: float = 110.0):
-        self.api_key, self.model, self.timeout = api_key, model, timeout
+    def __init__(self, api_key: str, model: str, timeout: float = 110.0, thinking: str = "low"):
+        self.api_key, self.model, self.timeout, self.thinking = api_key, model, timeout, thinking
+
+    def list_models(self) -> list[str]:
+        """Names of the models this key may call with generateContent (a live check that a model name exists)."""
+        request = urllib.request.Request("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+                                         headers={"x-goog-api-key": self.api_key})
+        payload = _call(request, 20.0, waits=())
+        return sorted(m["name"].split("/", 1)[-1] for m in payload.get("models", [])
+                      if "generateContent" in m.get("supportedGenerationMethods", []))
 
     def transcribe(self, data: bytes, mime: str) -> str:
         generation = {"temperature": 0}
-        if self.model.startswith("gemini-3"):
+        if self.thinking and self.model.startswith("gemini-3"):
             generation["thinkingConfig"] = {"thinkingLevel": "low"}   # reading text needs no long reasoning
         body = json.dumps({"contents": [{"parts": [
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("ascii")}},
@@ -78,7 +86,7 @@ class GeminiTranscriber(Transcriber):
 
     def complete(self, prompt: str) -> str:
         generation = {"temperature": 0.2}
-        if self.model.startswith("gemini-3"):
+        if self.thinking and self.model.startswith("gemini-3"):
             generation["thinkingConfig"] = {"thinkingLevel": "low"}
         body = json.dumps({"contents": [{"parts": [{"text": prompt}]}], "generationConfig": generation}).encode("utf-8")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
@@ -121,7 +129,7 @@ ClaudeTranscriber.complete = _claude_complete
 
 def build_transcriber(config) -> Transcriber | None:
     if config.GEMINI_API_KEY:
-        return GeminiTranscriber(config.GEMINI_API_KEY, config.GEMINI_MODEL, config.COUNTER_TIMEOUT_SECONDS)
+        return GeminiTranscriber(config.GEMINI_API_KEY, config.GEMINI_MODEL, config.COUNTER_TIMEOUT_SECONDS, config.GEMINI_THINKING)
     if config.ANTHROPIC_API_KEY:
         return ClaudeTranscriber(config.ANTHROPIC_API_KEY, config.COUNTER_MODEL, config.COUNTER_TIMEOUT_SECONDS)
     return None

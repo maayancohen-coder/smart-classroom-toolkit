@@ -19,7 +19,9 @@
 <div class="page">
   <div class="card">
     <h1>Homework</h1>
-    <p><button class="secondary" type="button" onclick="aiStatus()">Test the AI service</button> <span id="aiStatus" class="muted"></span></p>
+    <p><button class="secondary" type="button" onclick="aiStatus()">Test the AI service</button>
+      <button class="secondary" type="button" onclick="aiStatus('models=1')">List available models</button>
+      <button class="secondary" type="button" onclick="aiStatus('thinking=off')">Test without thinking setting</button> <span id="aiStatus" class="muted"></span></p>
     <p class="muted">Set up an assignment for a course: questions, the lecturer's solution and the course material. Students submit at <b>/homework</b>.
       {% if reader %}Handwriting reading is on ({{ reader }}).{% else %}Handwriting reading is off: scans without text are rejected until a key is set.{% endif %}</p>
     <label for="course">Course</label>
@@ -77,9 +79,10 @@ async function load() {
         <button class="secondary" style="margin-top:10px" onclick="bulk('${a.id}')">Import</button> <span id="bu_${a.id}"></span>
       </details></div>`).join("") : "No assignments yet";
 }
-async function aiStatus() {
+async function aiStatus(query = "") {
   $("aiStatus").textContent = "Testing…";
-  const d = await (await fetch("/api/ai-status")).json().catch(() => ({ ok: false, error: "No response from the server" }));
+  const d = await (await fetch("/api/ai-status?" + query)).json().catch(() => ({ ok: false, error: "No response from the server" }));
+  if (d.models) { $("aiStatus").textContent = d.models.join(", "); return; }
   $("aiStatus").textContent = d.ok ? `OK · ${d.service} · ${d.model} · ${d.seconds}s` : `FAILED · ${d.model || ""} · ${d.seconds ?? ""}s · ${d.error}`;
 }
 async function bulk(id) {
