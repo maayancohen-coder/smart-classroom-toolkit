@@ -587,7 +587,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         try:
             text = transcriber.transcribe(data, image_mime or "application/pdf")
         except HandwritingError as exc:
-            raise ValueError(str(exc)) from exc
+            raise ValueError(f"{exc} (the file had {len(text)} characters of selectable text, so it was sent to the reading service)") from exc
         if not text:
             raise ValueError("Could not read any text from the file")
         return text, upload.filename
