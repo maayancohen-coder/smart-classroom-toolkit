@@ -23,7 +23,8 @@ from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
 from attendance.handwriting import GeminiTranscriber, HandwritingError, build_transcriber
-from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_common_mistakes_prompt, build_review_prompt,
+from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_common_mistakes_prompt, build_review_prompt, build_summary_prompt,
+                                 build_transcript_fix_prompt,
                                  class_similarity, content_check)
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
 
@@ -251,7 +252,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         for x in sessions_of(course):
             if x.summary_published and x.transcript_corrected:
                 terms = [t.strip() for t in x.transcript_glossary.replace(",", "\n").splitlines() if t.strip()]
-                out.append({"started_at": x.started_at, **summarize(x.transcript_corrected, terms)})
+                out.append({"started_at": x.started_at, "ai_text": x.summary_ai, **summarize(x.transcript_corrected, terms)})
         return jsonify(out)
 
     @app.post("/api/course/<course_id>/message")
@@ -331,7 +332,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         x = get_session_or_404(session_id)
         terms = [t.strip() for t in x.transcript_glossary.replace(",", "\n").splitlines() if t.strip()]
-        return jsonify(published=x.summary_published, **summarize(x.transcript_corrected or x.transcript_raw, terms))
+        return jsonify(published=x.summary_published, ai_text=x.summary_ai,
+                       **summarize(x.transcript_corrected or x.transcript_raw, terms))
 
     @app.post("/api/session/<session_id>/summary/publish")
     def api_summary_publish(session_id):
@@ -534,6 +536,54 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         except HandwritingError as exc:
             return jsonify(ok=False, error=str(exc)), 400
         return jsonify(ok=True, text=text)
+
+    def session_terms(session) -> list[str]:
+        return parse_glossary(session.transcript_glossary)
+
+    @app.post("/api/session/<session_id>/transcript/ai-fix")
+    def api_transcript_ai_fix(session_id):
+        """Lecturer: repair one part of the transcript with the AI service (the browser sends the parts one by one)."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        chunk = str((request.get_json(silent=True) or {}).get("text") or "").strip()
+        if not chunk:
+            return jsonify(ok=False, error="Nothing to repair"), 400
+        text, error = run_llm(build_transcript_fix_prompt(chunk, session_terms(session)))
+        if text is None:
+            return jsonify(ok=False, error=error), 400
+        return jsonify(ok=True, text=text.strip())
+
+    @app.post("/api/session/<session_id>/transcript/save")
+    def api_transcript_save(session_id):
+        """Lecturer: keep an edited or AI-repaired transcript (the original recognition text stays in transcript_raw)."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        text = str((request.get_json(silent=True) or {}).get("text") or "").strip()[:200_000]
+        if not text:
+            return jsonify(ok=False, error="The transcript is empty"), 400
+        session.transcript_corrected = text
+        return jsonify(ok=True)
+
+    @app.post("/api/session/<session_id>/ai-summary")
+    def api_ai_summary(session_id):
+        """Lecturer: write a Hebrew summary with the AI service. It is only a draft until the lecturer saves it."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        transcript = session.transcript_corrected or session.transcript_raw
+        if not transcript.strip():
+            return jsonify(ok=False, error="Produce the transcript first"), 400
+        text, error = run_llm(build_summary_prompt(transcript, session_terms(session), roster_names()))
+        if text is None:
+            return jsonify(ok=False, error=error), 400
+        return jsonify(ok=True, text=text.strip())
+
+    @app.post("/api/session/<session_id>/summary/text")
+    def api_summary_text(session_id):
+        """Lecturer: save the summary text students will see ("" goes back to the automatic summary)."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        session.summary_ai = str((request.get_json(silent=True) or {}).get("text") or "").strip()[:20_000]
+        return jsonify(ok=True)
 
     @app.post("/api/session/<session_id>/slides")
     def api_slides(session_id):

@@ -68,9 +68,23 @@
 
   <div id="result" hidden>
     <label>Transcript</label>
-    <textarea id="corrected" readonly></textarea>
+    <textarea id="corrected"></textarea>
+    <div class="row">
+      <button id="aiFix" type="button" class="secondary">Repair with AI</button>
+      <button id="saveText" type="button" class="secondary">Save my edits</button>
+      <span class="muted" id="fixState"></span>
+    </div>
+    <p class="muted" style="font-size:.9rem">You can edit the transcript here. "Repair with AI" fixes misheard words and punctuation part by part without changing the content; the text is sent to an external AI service.</p>
     <p id="fixes"></p>
     <p id="dropped"></p>
+    <label for="aiSum">Summary for the students</label>
+    <textarea id="aiSum" dir="auto" placeholder="Press &quot;Write a summary with AI&quot;, edit it, then save. If you leave it empty, the automatic summary is shown."></textarea>
+    <div class="row">
+      <button id="aiSumBtn" type="button" class="secondary">Write a summary with AI</button>
+      <button id="saveSum" type="button" class="secondary">Save the summary</button>
+      <span class="muted" id="sumState"></span>
+    </div>
+    <p class="muted" style="font-size:.9rem">Check the summary before you publish it. Publish it from the course page (Publish to students).</p>
     <div class="row">
       <a class="btn secondary" id="dl" href="/api/session/{{ session.session_id }}/transcript.txt">Download as a file</a>
       <a class="btn secondary" href="/lecturer/{{ session.session_id }}">Back to the lecture</a>
@@ -177,7 +191,7 @@ $("cal").addEventListener("click", async () => {
   const voiced = got.filter(v => v > Math.max(0.004, floor * 2));
   if (voiced.length < 10) { $("state").textContent = "No speech heard. Try again closer to the microphone."; return; }
   const level = percentile(voiced, 0.5);
-  $("thr").value = Math.min(0.3, Math.max(0.005, level * 0.5)).toFixed(3);
+  $("thr").value = Math.min(0.3, Math.max(0.005, level * 0.35)).toFixed(3);
   updateMark(); renderLive();
   $("state").textContent = "Threshold set from the lecturer's voice";
 });
@@ -247,6 +261,49 @@ $("upRec").addEventListener("click", async () => {
 
 $("thr").addEventListener("input", () => { updateMark(); renderLive(); });
 updateMark();
+
+const postJson = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  .then(r => r.json()).catch(() => ({ ok: false, error: "The server did not answer" }));
+function parts(text, size = 5000) {
+  const out = []; let cur = "";
+  for (const para of text.split(/\n+/)) {
+    if (cur && (cur + "\n" + para).length > size) { out.push(cur); cur = ""; }
+    cur = cur ? cur + "\n" + para : para;
+    while (cur.length > size * 1.5) { const cut = cur.lastIndexOf(" ", size); const at = cut > 0 ? cut : size; out.push(cur.slice(0, at)); cur = cur.slice(at).trim(); }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+$("aiFix").addEventListener("click", async () => {
+  const chunks = parts($("corrected").value.trim()); if (!chunks.length) return;
+  $("aiFix").disabled = true; const done = [];
+  for (let i = 0; i < chunks.length; i++) {
+    $("fixState").textContent = `Repairing part ${i + 1} of ${chunks.length}…`;
+    const d = await postJson(`/api/session/${SID}/transcript/ai-fix`, { text: chunks[i] });
+    if (!d.ok) { $("fixState").textContent = "Failed: " + (d.error || "error") + ". Nothing was changed."; $("aiFix").disabled = false; return; }
+    done.push(d.text);
+  }
+  $("corrected").value = done.join("\n");
+  const s = await postJson(`/api/session/${SID}/transcript/save`, { text: $("corrected").value });
+  $("fixState").textContent = s.ok ? "Repaired and saved. Read it through before you publish." : "Repaired, but saving failed";
+  $("aiFix").disabled = false;
+});
+$("saveText").addEventListener("click", async () => {
+  const s = await postJson(`/api/session/${SID}/transcript/save`, { text: $("corrected").value });
+  $("fixState").textContent = s.ok ? "Saved" : (s.error || "Error");
+});
+$("aiSumBtn").addEventListener("click", async () => {
+  $("sumState").textContent = "Writing the summary… this can take up to a minute"; $("aiSumBtn").disabled = true;
+  await postJson(`/api/session/${SID}/transcript/save`, { text: $("corrected").value });
+  const d = await postJson(`/api/session/${SID}/ai-summary`, {});
+  $("sumState").textContent = d.ok ? "Draft ready: check it and press Save the summary" : "Failed: " + (d.error || "error");
+  if (d.ok) $("aiSum").value = d.text;
+  $("aiSumBtn").disabled = false;
+});
+$("saveSum").addEventListener("click", async () => {
+  const d = await postJson(`/api/session/${SID}/summary/text`, { text: $("aiSum").value });
+  $("sumState").textContent = d.ok ? "Saved" : "Error";
+});
 
 $("fix").addEventListener("click", async () => {
   const res = await fetch(`/api/session/${SID}/transcript`, { method: "POST", headers: { "Content-Type": "application/json" },

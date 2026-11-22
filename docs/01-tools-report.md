@@ -1,6 +1,6 @@
 # Tools Report
 
-Status: draft v1
+Status: v2 (section 3.9 added for the AI features that were built)
 
 This report lists the tools we considered for the attendance tool, what we tried on real devices, what worked, and what we dropped. Every result in section 3 comes from a real run (a laptop, an iPhone, and the hosted demo), not from documentation.
 
@@ -22,7 +22,7 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Phone identity | Random device cookie + personal PIN + browser profile hash | Biometrics / passkeys (WebAuthn), SMS codes, personal links by email | The user decided against biometrics. A PIN needs no extra service. Passkeys remain a possible future upgrade. |
 | Storage | In memory behind `Repository` classes | SQLite, PostgreSQL | KISS for the demo; the classes can be swapped for a database. |
 | Excel / CSV export | `openpyxl` and the standard `csv` module | Pandas | One small dependency. |
-| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 54 automated scenarios run in about one second, with one simulated phone per client. |
+| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 128 automated tests run in a few seconds, with one simulated phone per client. |
 | Hosting for the demo | Render (free web service, branch `demo-deploy`) | Local server, Cloudflare Tunnel, localhost.run, ngrok | See 3.4 and 3.5. |
 | People counting from a photo | Not adopted (adapter kept, manual count works) | Claude vision, Gemini vision | See 3.6. |
 
@@ -83,8 +83,22 @@ This report lists the tools we considered for the attendance tool, what we tried
 - **Result, useful:** the review found concrete, checkable points. It recomputed the numbers in the work (the three filter percentages, the response time 19.951666 - 19.797716 = 0.153950 s, and 1368 + 325 = 1693 bytes) and all were correct. It also found real weaknesses: the client IP changes between captures (10.1.24.27, 10.9.1.164, 10.9.4.93) and the text does not say why; one answer (server-side processing as "better security") is weak, because the real reason is that server-side checks cannot be bypassed by the user; section 22 repeats section 20; and a leftover note to ourselves ("you can rely on the screenshots") remained inside the text of section 21.
 - **Result, limits:** four pages (6, 7, 19, 21) are screenshots with no text, so the review could not check any claim that depends on them. The extracted text came out one word per line and needed cleaning first. The review could not tell whether the work answers what the lecturer asked, because the assignment text was missing.
 - **Privacy finding (NFR-10):** the first page holds the authors' names and ID numbers. The service must remove names and 9-digit numbers before sending the text to an external model, and tell the student what is sent.
-- **Decision:** the homework service stays a design (FR-40 to FR-43). It is not built into the demo. The review is a suggestion; the lecturer or student decides.
+- **Decision:** the experiment led to building the homework tool (FR-40 to FR-47) with the redaction of names and ID numbers (see 3.9). The review is a suggestion; the lecturer or student decides.
 - **Not measured:** how often the review is wrong, and the comparison of several submissions (FR-42). We make no claim about them.
+
+### 3.9 AI features in the built system (real runs on the hosted site)
+
+- **Tools chosen:** Gemini API (free tier) through one adapter, with a Claude implementation as an alternative; text from PDF with `pypdf`; scans, photos and handwriting read by the vision model; lecture audio transcribed by the same service.
+- **What happened in real runs:**
+  1. The default model `gemini-2.5-flash` answered 404 ("no longer available to new users"). We changed the default to `gemini-3.8-flash` and made the model a setting (`GEMINI_MODEL`).
+  2. Requests then returned 503 ("high demand"). We added retries with waiting.
+  3. Requests then ended in a timeout after 110 s, even for the simplest question ("reply OK"). A first guess blamed the thinking setting of the new model; the live test button showed the real cause: a 429 (quota exceeded) on `gemini-3.8-flash` for our free key, which our retries had hidden behind the waiting. A spent quota now fails at once with its reason.
+  4. The list of models available to the key (a button on the homework page) showed many alternatives. `gemini-3.1-flash-lite` answered "OK" in 1.6 seconds and is what the hosted site now uses.
+  5. The first AI review of a correct typed submission (linear algebra, determinant) reached the right conclusion but wrote its own re-calculation inside the answer under "Mistakes" ("wait, let me re-calculate ... no mistakes found") and did not name every correct question. The instructions now ask for conclusions only, "none found" when there is no mistake, and a list of the correct questions, and for the whole review to be written in Hebrew. The new wording was not yet compared with the old one on the same submission.
+  6. An uploaded lecture recording was transcribed on the hosted site and the lecturer confirmed that it works. The browser flow was also run on a 13-minute generated video, which was cut into three parts, with a fake service.
+- **Decisions:** the model name and the key are settings; the lecturer has a live test of the AI service and a list of available models; every AI text is marked as a suggestion; names and ID numbers are removed before sending; a student's AI requests are limited to one per 30 seconds.
+- **Known issue found in an earlier run:** the lecturer-voice calibration of the live transcript set the loudness threshold too high, so the lecturer's own speech was dropped. The calibration factor was lowered (from 0.5 to 0.35 of the lecturer's median level) and the threshold can still be set by hand with the slider; the new factor was not yet tested live.
+- **Not measured:** the accuracy of the speech-to-text on a real lecture, the accuracy of handwriting reading, and how often an AI review is wrong. We make no claim about them. The free tier may use submitted data to improve the service; real student data needs a paid tier.
 
 ## 4. Tools not adopted, and why
 
@@ -95,11 +109,13 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Native app | Contradicts "nothing to install". |
 | Cloudflare Tunnel, localhost.run | Did not work on our network (3.4). |
 | Vision API for people counting | Not stable in our attempts (3.6). |
+| A database (SQLite, PostgreSQL) | The free hosting plan erases its disk on every deployment, so a local database would not keep the data; an outside free database was left as a future step (storage layer is already separate). |
 
 ## 5. Risks that remain
 
 - Indoor location accuracy of tens of meters.
 - The free server may sleep or restart during the demo; in-memory data is lost.
+- The free AI service can fail, be overloaded or run out of quota; the pages show the reason and the lecturer can test it before the demo.
 - A student can share a PIN; the system detects some cases (same coordinates, same phone profile) and does not claim to stop all of them.
 
 ## 6. References inside this repository

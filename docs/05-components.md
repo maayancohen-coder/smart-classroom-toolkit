@@ -1,6 +1,6 @@
 # Software Components
 
-Status: draft v1
+Status: v2 (design in sections 1 to 6; what was built is in section 7)
 
 ## 1. Overview
 
@@ -138,3 +138,23 @@ This is the core of the system, so it is split into smaller parts. These parts b
 | Heavy work in background jobs | A one-hour recording must not block check-ins |
 | Each attendance check is a separate component | New signals are added without touching the others (FR-19, NFR-23) |
 | Photos deleted after counting | Privacy (NFR-7) |
+
+## 7. As built in the demo
+
+The design above (separate services, a job runner, three external services) is kept as the target. The demo is a smaller version of it.
+
+| Design component | In the demo |
+|---|---|
+| API layer | Flask routes in `app.py`; sign-in with a signed session cookie (students: student number and personal PIN; lecturers: key and personal password) |
+| Session, Attendance, Report services | The `attendance` package (token service, ticket store, checks, evaluator, device registry, PIN store, class cluster, head-count comparer, exporter) |
+| Media service | `transcript.py` (correction of English terms by sound using a glossary, lecturer-voice filter), `slides.py` (text and terms from PPTX, PDF or text), `summary.py` (extractive summary). A recording is cut into audio parts in the lecturer's browser and sent part by part to `/recording-chunk`. |
+| Homework service | `homework.py` (assignments, submissions with the original file, similarity, course-content check, report, redaction, prompts), `handwriting.py` (reading of scans and photos) |
+| Portal | `courses.py` (course catalogue file `data/courses.json`), `notes.py` (live notes and messages with rate limits) |
+| Background job runner | Not built. Long work is done part by part by the browser (recording parts, transcript repair), one short request each, with progress shown on the page. |
+| Data store and temporary files | In memory behind repository classes. The catalogue file lives in the repository; the passwords file is optional. Uploaded files are kept in memory with the submission. |
+| Speech-to-text, LLM | One adapter, `Transcriber`, with two implementations (Gemini and Claude). It offers `transcribe` (image or PDF to text), `transcribe_audio` (audio to text, Gemini only) and `complete` (text to text). Chosen by which API key is set. A fake implements it in the tests. |
+| People counter | Not in the demo (typed head count) |
+
+Safety around the AI adapter: names and ID numbers are removed before text is sent (`redact`), submitted text is marked as data between markers so that it is not obeyed as an instruction, a student can call the AI at most once every 30 seconds, a spent quota fails at once with its reason, other overload errors are retried with waiting, and the lecturer has a live test of the AI service (`/api/ai-status`).
+
+Deployment as built: one Gunicorn process on the Render free plan, deployed automatically from the `demo-deploy` branch. The free plan sleeps and a new deployment erases the memory; the AI key, model and lecturer key are environment variables.

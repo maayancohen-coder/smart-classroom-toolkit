@@ -30,7 +30,9 @@ async function lectures() {
 }
 async function show(id) {
   const s = await (await fetch(`/api/session/${id}/summary`)).json();
-  $("sum").innerHTML = `<h3>Automatic summary ${s.published ? "(published)" : "(not published)"}</h3><p><small>Key terms: ${esc(s.terms.join(", "))}</small></p><ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  $("sum").innerHTML = s.ai_text
+    ? `<h3>Summary ${s.published ? "(published)" : "(not published)"}</h3><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.ai_text)}</pre>`
+    : `<h3>Automatic summary ${s.published ? "(published)" : "(not published)"}</h3><p><small>Key terms: ${esc(s.terms.join(", "))}</small></p><ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
 }
 async function pub(id, value) {
   await fetch(`/api/session/${id}/summary/publish`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ published: value }) });

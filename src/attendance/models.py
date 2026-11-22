@@ -107,6 +107,7 @@ class LectureSession:
     transcript_raw: str = ""        # what the speech recognition heard
     transcript_corrected: str = ""  # after the glossary correction
     transcript_glossary: str = ""
+    summary_ai: str = ""            # a summary written by the AI service and edited by the lecturer ("" = use the extractive one)
     course_id: str = ""             # the catalog course this lecture belongs to ("" = free-text course name)
     summary_published: bool = False  # the lecturer decides when students may see the summary
     slides_name: str = ""

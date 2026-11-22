@@ -1,10 +1,10 @@
 # Implementation Approach and Demo Notes
 
-Status: draft v1
+Status: v2
 
 ## 1. Implementation approach (KISS)
 
-The demo covers only the attendance tool, and keeps it as small as the design allows.
+The live demo shows the attendance tool; the portal, the transcript and the homework tool with AI review are shown briefly (section 7). Everything is kept as small as the design allows.
 
 | Decision | Choice | Why |
 |---|---|---|
@@ -28,6 +28,9 @@ Do all of this in the 15 minutes before the presentation, in the classroom.
 5. Phones: location services on for the browser, mobile data or the university Wi-Fi, a private tab ready.
 6. Have two students' IDs ready (for example `100000001` and `100000002`) and agree on the PINs you will use.
 7. Record a 60-second screen video of the whole flow the day before, as a backup.
+8. Change `LECTURER_KEY` in Render to a new value that has not been shown anywhere, and sign in once as the lecturer to choose your personal password (it is forgotten on every deployment). Do not deploy again after this step.
+9. In the homework page press **Test the AI service**: it must answer OK in a few seconds. If it does not, change `GEMINI_MODEL` (use **List available models**).
+10. Create the sample assignment again (data is erased by a deployment) and import the sample submissions.
 
 ## 3. The 10-minute plan
 
@@ -73,3 +76,17 @@ Steps 2 to 6 were confirmed by hand on a real phone during development and are a
 | What data is stored? | Student ID, time, coordinates, a hash of the PIN, and the reasons. It is kept in memory in the demo. |
 | Why was the photo count dropped? | The free vision service gave no stable result in our tests; the design remains and the manual count works. |
 | Does it scale to 200 students? | The checks are cheap; for real use the in-memory storage would be replaced by a database and several servers. |
+
+## 7. Short extra demo (about 2 minutes, only if time allows)
+
+| # | Action | Expected result |
+|---|---|---|
+| 1 | Open the site, sign in as a student, open a course | The course page lists the homework, a live lecture and published summaries |
+| 2 | Submit a typed or scanned solution, open **View my submission** | The status shows Submitted and the file opens |
+| 3 | Sign in as the lecturer, open the assignment report, press **AI review** on one student | A Hebrew review with strengths, mistakes and suggestions |
+| 4 | Press **Common mistakes (AI)** | The mistakes that repeat across the class and what to re-teach |
+| 5 | Open the transcript page of a lecture, show the result of a short recording and the summary | A transcript with corrected terms and a summary that can be published |
+
+If the AI service is slow or fails, show the live test button, read the reason, and continue with the recorded video.
+
+Questions we may get about the AI part: *Is student data sent outside?* Yes, after names and ID numbers are removed; the screens say so; real data would need a paid tier. *Is the AI review a grade?* No, it is a suggestion for a person. *How accurate is it?* We did not measure it; the first runs are in the tools report.

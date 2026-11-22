@@ -43,7 +43,7 @@ class Transcriber:
 
     def complete(self, prompt: str) -> str:
         """Plain text in, text out (used for the homework review)."""
-        raise NotImplementedError
+        raise HandwritingError("This AI service cannot write text answers.")
 
 
 RETRY_CODES = (429, 500, 502, 503, 504)

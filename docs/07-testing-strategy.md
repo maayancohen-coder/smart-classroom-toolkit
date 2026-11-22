@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Status: draft v1
+Status: v2 (128 automated tests)
 
 This document explains how we check that the system does what the SRS requires. It is organized around the classes in document 06, because each class is tested on its own and then together with the others.
 
@@ -70,7 +70,7 @@ This document explains how we check that the system does what the SRS requires. 
 | `CommentService` | A named comment stores the author. An anonymous comment stores **no** author. A comment after the lecture is stored with the session. | Unit |
 | `QuestionSuggester` (with `FakeLLMClient`) | The slide text is passed to the LLM, the suggestion is returned and can be edited. An LLM failure does not block creating a poll by hand. | Unit |
 
-### 4.4 AI services
+### 4.4 AI services (as designed; section 4.5 says what was built and tested)
 
 | Class | What we test | Type |
 |---|---|---|
@@ -81,6 +81,20 @@ This document explains how we check that the system does what the SRS requires. 
 | `MediaService` | End to end with fakes: upload, job, transcript and summary stored. An external failure leaves the rest of the system working. | Integration |
 | `HomeworkService` | A review is visible only to the uploader. A student cannot get another student's submission. A lecturer comparison covers only the chosen assignment. | Integration |
 | `RemoteSpeechToText`, `RemoteLLMClient` | A real call on one sample, to check the connection and the format of the answer. | Manual, once |
+
+### 4.5 AI services as built
+
+| Part | What we test | Type |
+|---|---|---|
+| `Transcriber` adapter (Gemini) | The request carries the file or audio and the right instruction; an overloaded service is retried; a spent quota fails at once with its reason; the error text names the cause | Unit with a faked network call |
+| Homework review | The prompt contains the assignment, the materials or the lecturer's solution; names and ID numbers are removed; the submitted text is inside data markers; the answer is requested in Hebrew; classmates are anonymous | Unit with a fake reader |
+| Student feedback | Needs at least 3 other submissions for a class comparison, respects the lecturer's switch, never quotes classmates, at most one request per 30 seconds | Integration through the routes |
+| Common mistakes | Needs two submissions, lecturer only, answers are numbered and anonymous | Integration |
+| Recording | Audio parts are accepted from the lecturer only, errors reach the page, nothing is stored but the text | Integration |
+| Transcript repair and summary | Prompts contain the glossary and the data markers; only the lecturer can call them; the summary needs a transcript | Integration |
+| Browser flow of a recording | A 13-minute video was loaded in Chromium, cut into three parts and transcribed with a fake service | Manual, scripted once |
+
+Not tested automatically and not measured: the accuracy of the speech-to-text on a real lecture, the accuracy of handwriting reading and the quality of the AI reviews. The first real runs are in the tools report; no accuracy figure is claimed.
 
 ## 5. Decision table for the evaluator
 
@@ -132,7 +146,20 @@ Each scenario uses a separate simulated phone.
 | Head count (typed) with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24, FR-24a |
 | Comment sent anonymously | No author in the lecturer view | FR-33 |
 
-54 automated tests (scenarios and head-count logic) are written and passing in the demo code.
+128 automated tests are written and passing in the demo code:
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_flow.py` | 35 | Attendance scenarios through the web routes (rotating code, location, PIN, device checks, evaluator, export, lecturer functions) |
+| `test_headcount.py` | 19 | Head count, gap and tolerance logic |
+| `test_slides.py` | 9 | Text and terms from slides (PPTX, PDF, text) and refusal of bad files |
+| `test_transcript.py` | 17 | Glossary correction, lecturer-voice filter, student questions, download |
+| `test_portal.py` | 10 | Sign-in, course lists, live notes, messages, published summaries, the student's own submission on the course page |
+| `test_homework.py` | 26 | Assignments, submissions, report, similarity, course-content check, scans through the reader, AI review, redaction, retry and quota handling, student feedback and class comparison, common mistakes, bulk import, opening the uploaded file, AI status, Hebrew prompts |
+| `test_passwords.py` | 5 | PIN and password chosen once, lecturer download, persistence in a file, hiding the values |
+| `test_recording.py` | 7 | Audio parts, errors, text repair, AI summary, saving, lecturer-only access |
+
+All external services are replaced by fakes in these tests, so they check our code and the shape of the requests, not the quality of the AI answers.
 
 ## 7. Non-functional and AI-quality tests
 
@@ -206,8 +233,9 @@ A dry run of the 10-minute demo is performed once the day before.
 | FR-20 to FR-24a | `HeadCountComparer`, `PeopleCounter` with a fake; the photo measurement was not done |
 | FR-25 to FR-28 | Exporter tests, manual add scenario |
 | FR-29 to FR-33 | `PollService`, `CommentService` |
-| FR-34 to FR-39 | `MediaService`, `JobRunner`, `AudioExtractor`, WER measurement |
-| FR-40 to FR-43 | `HomeworkService` |
+| FR-34 to FR-39 | `test_transcript.py`, `test_slides.py`, `test_recording.py`; the WER measurement was not done |
+| FR-40 to FR-47 | `test_homework.py` |
+| FR-48 to FR-54 | `test_portal.py`, `test_passwords.py`, `test_flow.py` |
 | NFR-1 to NFR-6 | Security tests |
 | NFR-7 to NFR-11 | Privacy tests |
 | NFR-12 to NFR-14 | Performance tests |

@@ -38,8 +38,9 @@ $("send").onclick = async () => {
 (async () => {
   const items = await (await fetch("/api/course/{{ course.course_id }}/summaries")).json();
   $("sums").innerHTML = items.length ? items.map(s => `<div class="sum"><b>${new Date(s.started_at * 1000).toLocaleDateString("en-GB")}</b>
-    ${s.terms.length ? `<p class="muted">Key terms: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")
-    + '<p class="muted" style="font-size:.85rem">Automatic summary picked from the transcript. Not a substitute for attending the lecture.</p>'
+    ${s.ai_text ? `<pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.ai_text)}</pre>`
+      : `${s.terms.length ? `<p class="muted">Key terms: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`}</div>`).join("")
+    + '<p class="muted" style="font-size:.85rem">Summary prepared from the lecture transcript. Not a substitute for attending the lecture.</p>'
     : "The lecturer has not published any summaries yet.";
 })();
 </script>
