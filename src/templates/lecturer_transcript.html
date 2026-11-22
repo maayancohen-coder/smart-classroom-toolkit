@@ -65,7 +65,6 @@
 
   <label for="glossary">Terms from the slides (one per line, or comma-separated)</label>
   <textarea id="glossary" class="small" placeholder="Strategy, Adapter, Interface, Unit Test"></textarea>
-  <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="defaults" checked style="width:auto"> Also include common software engineering terms</label>
   <div class="row"><button id="fix" type="button">Produce transcript</button></div>
 
   <div id="result" hidden>
@@ -317,7 +316,7 @@ $("fixes").addEventListener("click", e => {
 $("fix").addEventListener("click", async () => {
   const res = await fetch(`/api/session/${SID}/transcript`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ raw: $("raw").value, segments, threshold: threshold(),
-                           glossary: $("glossary").value, defaults: $("defaults").checked, exclude: [...excluded] }) });
+                           glossary: $("glossary").value, defaults: false, exclude: [...excluded] }) });
   if (!res.ok) { $("state").textContent = "Error producing the transcript"; return; }
   const d = await res.json();
   $("result").hidden = false;
