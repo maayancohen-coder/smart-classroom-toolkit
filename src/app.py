@@ -702,6 +702,20 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         except HandwritingError as exc:
             return None, str(exc)
 
+    @app.get("/api/ai-status")
+    def api_ai_status():
+        """Lecturer: a one-line live test of the AI service (key, model, answer time, exact error)."""
+        require_lecturer()
+        reader = app.extensions["transcriber"]
+        if reader is None:
+            return jsonify(ok=False, error="No key: GEMINI_API_KEY is not set on the server")
+        started = time.time()
+        try:
+            answer = reader.complete("Reply with the single word OK.")
+            return jsonify(ok=True, service=reader.name, model=getattr(reader, "model", ""), seconds=round(time.time() - started, 1), answer=answer[:40])
+        except HandwritingError as exc:
+            return jsonify(ok=False, service=reader.name, model=getattr(reader, "model", ""), seconds=round(time.time() - started, 1), error=str(exc))
+
     @app.post("/api/homework/<assignment_id>/review/<student_id>")
     def api_homework_review(assignment_id, student_id):
         """Lecturer: an LLM review of one submission, optionally compared with the classmates' work."""

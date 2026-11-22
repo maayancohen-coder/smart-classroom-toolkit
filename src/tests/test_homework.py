@@ -341,3 +341,13 @@ def test_bulk_import_reads_files_named_by_student_number():
     assert res["saved"] == 2 and "999.txt" in res["problems"][0]
     assert lecturer.get(f"/api/homework/{aid}/report").get_json()["count"] == 2
     assert app.test_client().post(f"/api/homework/{aid}/bulk", data={}).status_code == 403
+
+
+def test_ai_status_reports_the_live_answer_and_the_error():
+    app, lecturer = lecturer_client()
+    app.extensions["transcriber"] = FakeReader()
+    ok = lecturer.get("/api/ai-status").get_json()
+    assert ok["ok"] and "seconds" in ok
+    app.extensions["transcriber"] = None
+    assert lecturer.get("/api/ai-status").get_json()["ok"] is False
+    assert app.test_client().get("/api/ai-status").status_code == 403
