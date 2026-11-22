@@ -64,12 +64,17 @@ async function load() {
       <span class="tag ${a.submissions ? "ok" : "warn"}">${a.submissions} submissions</span>
       <small>${a.has_assignment ? "Questions ✓" : "Questions ✗"} · ${a.has_reference ? "Solution ✓" : "Solution ✗"} · ${a.has_materials ? "Material ✓" : "Material ✗"}</small><br>
       <button class="secondary" onclick="report('${a.id}')">Report and comparison</button>
+      <label style="display:inline-block;font-weight:400;margin-inline-start:12px"><input type="checkbox" style="width:auto" ${a.allow_student_comparison ? "checked" : ""}
+        onchange="setCompare('${a.id}', this.checked)"> Students see an anonymous comparison with the class</label>
       <details><summary>Add or replace files</summary>
         <label>Questions</label><input type="file" id="a_${a.id}">
         <label>Lecturer's solution</label><input type="file" id="r_${a.id}">
         <label>Course material</label><input type="file" id="m_${a.id}">
         <button class="secondary" style="margin-top:10px" onclick="upd('${a.id}')">Save files</button> <span id="u_${a.id}"></span>
       </details></div>`).join("") : "No assignments yet";
+}
+async function setCompare(id, value) {
+  await fetch(`/api/homework/${id}/settings`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ allow_student_comparison: value }) });
 }
 async function upd(id) {
   const fd = new FormData(); addFiles(fd, [["assignment","a_"+id],["reference","r_"+id],["materials","m_"+id]]);
@@ -91,13 +96,33 @@ async function report(id) {
     ${r.rows.map(x => `<tr><td>${esc(x.name)}<br><small>${esc(x.student_id)}</small></td><td>${pct(x.vs_reference)}</td><td>${pct(x.coverage)}</td>
       <td>${x.closest_name ? `${esc(x.closest_name)} <span class="tag ${x.flagged ? "bad" : "ok"}">${x.closest_percent}%</span>` : "-"}</td>
       <td>${esc(x.outside.join(", "))}</td><td>${esc(x.missing.join(", "))}</td>
-      <td><button class="secondary" onclick="view('${id}','${esc(x.student_id)}')">Text</button></td></tr>`).join("")}</table>
+      <td><button class="secondary" onclick="view('${id}','${esc(x.student_id)}')">Text</button>
+        <button class="secondary" onclick="llm('${id}','${esc(x.student_id)}','${esc(x.name)}')">AI review</button></td></tr>`).join("")}</table>
     <div id="viewer"></div>`;
   card.scrollIntoView();
 }
 async function view(id, sid) {
   const s = await (await fetch(`/api/homework/${id}/submission/${sid}`)).json();
   $("viewer").innerHTML = `<h3>${esc(s.name)} · ${esc(s.filename)}</h3><pre>${esc(s.text)}</pre>`;
+}
+function llm(id, sid, name) {
+  $("viewer").innerHTML = `<h3>AI review · ${esc(name)}</h3>
+    <label style="font-weight:400"><input type="radio" name="mode" value="course_only" checked style="width:auto"> Judge by the course material only</label>
+    <label style="font-weight:400"><input type="radio" name="mode" value="solution" style="width:auto"> Judge against the lecturer's solution</label>
+    <label style="font-weight:400"><input type="checkbox" id="peers" checked style="width:auto"> Compare with the other students' answers (anonymous, names and ID numbers removed)</label>
+    <button id="runLlm" style="margin-top:10px">Run review</button> <span id="llmState" class="muted"></span>
+    <pre id="llmOut"></pre>
+    <p class="muted" style="font-size:.85rem">The text is sent to an external AI service. The review is a suggestion for you to read, not a grade.</p>`;
+  $("runLlm").onclick = async () => {
+    $("runLlm").disabled = true; $("llmState").textContent = "Reviewing… this can take up to a minute";
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    const res = await fetch(`/api/homework/${id}/review/${sid}`, { method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ mode, peers: $("peers").checked }) });
+    const d = await res.json().catch(() => ({ ok: false, error: "Error" }));
+    $("runLlm").disabled = false; $("llmState").textContent = d.ok ? "" : (d.error || "Error");
+    if (d.ok) $("llmOut").textContent = d.review;
+  };
+  $("viewer").scrollIntoView();
 }
 load();
 </script>

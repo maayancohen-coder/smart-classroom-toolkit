@@ -19,6 +19,7 @@
   <label>Solution file (PDF or image, handwriting allowed)</label><input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.pptx">
   <label for="text">Or paste the solution</label><textarea id="text"></textarea>
   <button class="secondary full" id="check">Check against the course material (not saved)</button>
+  <button class="secondary full" id="llmCheck">AI review of my answer (course material only)</button>
   <button class="full" id="send">Submit</button>
   <div id="out"></div>
 </div></div>
@@ -56,11 +57,34 @@ $("check").onclick = async () => {
     <details><summary>Text read from the file</summary><pre style="white-space:pre-wrap">${esc(d.text)}</pre></details>
     <p class="muted">This is only a hint, not a grade. The check is not saved and not sent to the lecturer.</p></div>`;
 };
+$("llmCheck").onclick = async () => {
+  if (!$("asg").value) return;
+  const d = await post(`/api/homework/${$("asg").value}/llm-check`, form(), $("llmCheck"));
+  if (!d.ok) { $("out").innerHTML = `<div class="res bad">${esc(d.error)}</div>`; return; }
+  show(d);
+};
+function show(d) {
+  const sim = d.similarity || {};
+  const classLine = !d.comparison_allowed ? "The lecturer turned off the comparison with the class for this assignment."
+    : !sim.enough ? `Not enough submissions yet for an anonymous comparison (${sim.others || 0} so far, at least 3 are needed).`
+    : `Similarity to the closest answer in the class: <b>${esc(sim.level)}</b> (${sim.percent}%).` + (sim.level === "high" ? " Make sure the work is your own." : "");
+  $("out").innerHTML = `<div class="res"><b>AI review</b><pre style="white-space:pre-wrap">${esc(d.review)}</pre>
+    <p>${classLine}</p>
+    <p class="muted">A suggestion only, not a grade. ${d.compared ? "The comparison with the class is anonymous: no one else's text or name is shown. " : ""}Your text was sent to an external AI service.</p></div>`;
+}
+document.addEventListener("click", async e => {
+  if (e.target.id !== "fb") return;
+  e.target.disabled = true; e.target.textContent = "Reviewing… this can take up to a minute";
+  const res = await fetch(`/api/homework/${$("asg").value}/my-feedback`, { method: "POST" });
+  const d = await res.json().catch(() => ({ ok: false, error: "Network problem" }));
+  if (d.ok) show(d); else { e.target.disabled = false; e.target.textContent = "Get AI feedback on my submission"; $("out").insertAdjacentHTML("beforeend", `<div class="res bad">${esc(d.error)}</div>`); }
+});
 $("send").onclick = async () => {
   if (!$("asg").value) return;
   const fd = form(); fd.append("student_id", $("sid").value); fd.append("pin", $("pin").value);
   const d = await post(`/api/homework/${$("asg").value}/submit`, fd, $("send"));
-  $("out").innerHTML = d.ok ? `<div class="res ok">${esc(d.name)}, your submission was received${d.replaced ? " (replaced an earlier submission)" : ""}.</div>`
+  $("out").innerHTML = d.ok ? `<div class="res ok">${esc(d.name)}, your submission was received${d.replaced ? " (replaced an earlier submission)" : ""}.
+      <p><button class="secondary" id="fb">Get AI feedback on my submission</button></p></div>`
                             : `<div class="res bad">${esc(d.error)}</div>`;
 };
 init();

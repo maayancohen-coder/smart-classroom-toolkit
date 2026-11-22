@@ -30,6 +30,10 @@ class Transcriber:
     def transcribe(self, data: bytes, mime: str) -> str:
         raise NotImplementedError
 
+    def complete(self, prompt: str) -> str:
+        """Plain text in, text out (used for the homework review)."""
+        raise NotImplementedError
+
 
 RETRY_CODES = (429, 500, 502, 503, 504)
 RETRY_WAITS = (4, 10, 20)       # seconds; a busy model usually answers on the second or third try
@@ -72,6 +76,19 @@ class GeminiTranscriber(Transcriber):
         return "".join(p.get("text", "") for p in parts).strip()
 
 
+    def complete(self, prompt: str) -> str:
+        generation = {"temperature": 0.2}
+        if self.model.startswith("gemini-3"):
+            generation["thinkingConfig"] = {"thinkingLevel": "low"}
+        body = json.dumps({"contents": [{"parts": [{"text": prompt}]}], "generationConfig": generation}).encode("utf-8")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        request = urllib.request.Request(url, data=body, method="POST", headers={
+            "content-type": "application/json", "x-goog-api-key": self.api_key})
+        payload = _call(request, self.timeout)
+        parts = (payload.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+        return "".join(p.get("text", "") for p in parts).strip()
+
+
 class ClaudeTranscriber(Transcriber):
     name = "claude"
 
@@ -88,6 +105,18 @@ class ClaudeTranscriber(Transcriber):
             "content-type": "application/json", "x-api-key": self.api_key, "anthropic-version": "2023-06-01"})
         payload = _call(request, self.timeout)
         return "".join(b.get("text", "") for b in payload.get("content", []) if b.get("type") == "text").strip()
+
+
+def _claude_complete(self, prompt: str) -> str:
+    body = json.dumps({"model": self.model, "max_tokens": 2000, "temperature": 0.2,
+                       "messages": [{"role": "user", "content": prompt}]}).encode()
+    request = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+        "content-type": "application/json", "x-api-key": self.api_key, "anthropic-version": "2023-06-01"})
+    payload = _call(request, self.timeout)
+    return "".join(b.get("text", "") for b in payload.get("content", []) if b.get("type") == "text").strip()
+
+
+ClaudeTranscriber.complete = _claude_complete
 
 
 def build_transcriber(config) -> Transcriber | None:

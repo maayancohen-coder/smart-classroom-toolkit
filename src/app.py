@@ -21,7 +21,8 @@ from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
 from attendance.handwriting import HandwritingError, build_transcriber
-from attendance.homework import HomeworkStore, build_report, content_check
+from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_review_prompt,
+                                 class_similarity, content_check)
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
 
 DEVICE_COOKIE = "did"
@@ -607,7 +608,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         return jsonify([{"id": a.assignment_id, "course": a.course, "title": a.title,
                          "submissions": len(a.submissions), "has_reference": bool(a.reference_text),
-                         "has_materials": bool(a.materials_text), "has_assignment": bool(a.assignment_text)}
+                         "has_materials": bool(a.materials_text), "has_assignment": bool(a.assignment_text),
+                         "allow_student_comparison": a.allow_student_comparison}
                         for a in homework.all()])
 
     def save_files(assignment) -> None:
@@ -652,6 +654,88 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         if submission is None:
             abort(404)
         return jsonify(name=submission.name, filename=submission.filename, text=submission.text)
+
+    llm_last: dict[str, float] = {}
+
+    def roster_names() -> tuple:
+        return tuple(s.name for s in service.roster.all())
+
+    def run_llm(prompt: str):
+        reader = app.extensions["transcriber"]
+        if reader is None:
+            return None, "No AI service is set up. Set GEMINI_API_KEY (or ANTHROPIC_API_KEY) on the server."
+        try:
+            return reader.complete(prompt), ""
+        except HandwritingError as exc:
+            return None, str(exc)
+
+    @app.post("/api/homework/<assignment_id>/review/<student_id>")
+    def api_homework_review(assignment_id, student_id):
+        """Lecturer: an LLM review of one submission, optionally compared with the classmates' work."""
+        require_lecturer()
+        assignment = assignment_or_404(assignment_id)
+        submission = assignment.submissions.get(student_id)
+        if submission is None:
+            abort(404)
+        data = request.get_json(silent=True) or {}
+        mode = "solution" if data.get("mode") == "solution" else "course_only"
+        peers = bool(data.get("peers"))
+        text, error = run_llm(build_review_prompt(assignment, submission, mode, peers, roster_names()))
+        if text is None:
+            return jsonify(ok=False, error=error), 400
+        return jsonify(ok=True, review=text, mode=mode, peers=peers)
+
+    @app.post("/api/homework/<assignment_id>/llm-check")
+    def api_homework_llm_check(assignment_id):
+        """Student: an AI review of the answer before submitting. Course material only; no classmates' work,
+        no lecturer solution; nothing is stored."""
+        student = require_student()
+        assignment = assignment_or_404(assignment_id)
+        now = time.time()
+        if now - llm_last.get(student.student_id, 0.0) < 30:
+            return jsonify(ok=False, error="Please wait 30 seconds between AI reviews"), 429
+        try:
+            text, _ = read_upload("file")
+        except ValueError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        if len(text) < 5:
+            return jsonify(ok=False, error="No text received"), 400
+        llm_last[student.student_id] = now
+        own = Submission(student.student_id, student.name, "draft", text, now)
+        return student_feedback(assignment, own)
+
+    def student_feedback(assignment, own):
+        """AI review for a student: course material only, plus an anonymous comparison with the class when allowed."""
+        compare = assignment.allow_student_comparison
+        others = [s for s in assignment.submissions.values() if s.student_id != own.student_id]
+        use_peers = compare and len(others) >= MIN_PEERS_FOR_STUDENTS
+        review, error = run_llm(build_review_prompt(assignment, own, "course_only", use_peers, roster_names(), "student"))
+        if review is None:
+            return jsonify(ok=False, error=error), 400
+        similarity_info = class_similarity(assignment, own) if compare else {"enough": False, "others": len(others)}
+        return jsonify(ok=True, review=review, compared=use_peers, similarity=similarity_info, comparison_allowed=compare)
+
+    @app.post("/api/homework/<assignment_id>/my-feedback")
+    def api_homework_my_feedback(assignment_id):
+        """Feedback on the answer the logged-in student already submitted."""
+        student = require_student()
+        assignment = assignment_or_404(assignment_id)
+        own = assignment.submissions.get(student.student_id)
+        if own is None:
+            return jsonify(ok=False, error="Submit your answer first"), 400
+        now = time.time()
+        if now - llm_last.get(student.student_id, 0.0) < 30:
+            return jsonify(ok=False, error="Please wait 30 seconds between AI reviews"), 429
+        llm_last[student.student_id] = now
+        return student_feedback(assignment, own)
+
+    @app.post("/api/homework/<assignment_id>/settings")
+    def api_homework_settings(assignment_id):
+        require_lecturer()
+        assignment = assignment_or_404(assignment_id)
+        data = request.get_json(silent=True) or {}
+        assignment.allow_student_comparison = bool(data.get("allow_student_comparison"))
+        return jsonify(ok=True, allow_student_comparison=assignment.allow_student_comparison)
 
     @app.get("/homework")
     def student_homework():

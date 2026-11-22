@@ -23,6 +23,12 @@ class FakeReader(Transcriber):
     def __init__(self, text="", fail=False):
         self.text, self.fail, self.calls = text, fail, []
 
+    def complete(self, prompt):
+        self.prompts = getattr(self, "prompts", []) + [prompt]
+        if self.fail:
+            raise HandwritingError("boom")
+        return "Strengths: fine. Mistakes: none."
+
     def transcribe(self, data, mime):
         self.calls.append(mime)
         if self.fail:
@@ -189,3 +195,109 @@ def test_gemini_3_reads_with_low_thinking_and_older_models_do_not(monkeypatch):
     GeminiTranscriber("k", "gemini-2.5-flash").transcribe(b"x", "application/pdf")
     assert sent[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
     assert "thinkingConfig" not in sent[1]["generationConfig"]
+
+
+def reviewed_setup():
+    app, lecturer = lecturer_client()
+    aid = make_assignment(lecturer)
+    mine = "My answer. Contact 123456789. Written by נועה לוי with the kernel method."
+    for sid, text in (("100000001", mine), ("100000002", "Another student's idea about eigenvalues and דנה כהן עם איתי כהן")):
+        submit(app.test_client(), aid, sid, text)
+    app.extensions["transcriber"] = FakeReader()
+    return app, lecturer, aid
+
+
+def test_llm_review_removes_names_and_ids_and_labels_classmates_anonymously():
+    app, lecturer, aid = reviewed_setup()
+    res = lecturer.post(f"/api/homework/{aid}/review/100000001", json={"mode": "course_only", "peers": True})
+    assert res.get_json()["ok"] and "Strengths" in res.get_json()["review"]
+    prompt = app.extensions["transcriber"].prompts[0]
+    assert "123456789" not in prompt and "[ID]" in prompt
+    assert "נועה לוי" not in prompt and "איתי כהן" not in prompt and "[NAME]" in prompt
+    assert "Student A" in prompt and "classmates" in prompt
+    assert "100000002" not in prompt
+
+
+def test_llm_review_modes_choose_what_the_model_sees():
+    app, lecturer, aid = reviewed_setup()
+    lecturer.post(f"/api/homework/{aid}/review/100000001", json={"mode": "course_only", "peers": False})
+    lecturer.post(f"/api/homework/{aid}/review/100000001", json={"mode": "solution", "peers": False})
+    only_course, with_solution = app.extensions["transcriber"].prompts
+    assert "course_material" in only_course and "lecturer_solution" not in only_course
+    assert "lecturer_solution" in with_solution and "classmates" not in with_solution
+
+
+def test_student_ai_check_never_sees_the_solution_or_classmates_and_is_rate_limited():
+    from test_portal import student_client
+    app, lecturer, aid = reviewed_setup()
+    student = student_client(app, "100000003")
+    data = {"file_text": "my draft about determinant and rank"}
+    res = student.post(f"/api/homework/{aid}/llm-check", data=data, content_type="multipart/form-data")
+    assert res.get_json()["ok"]
+    prompt = app.extensions["transcriber"].prompts[0]
+    assert "lecturer_solution" not in prompt and "classmates" not in prompt and "Another student" not in prompt
+    again = student.post(f"/api/homework/{aid}/llm-check", data=data, content_type="multipart/form-data")
+    assert again.status_code == 429
+    assert app.test_client().post(f"/api/homework/{aid}/llm-check", data=data).status_code == 401
+    assert lecturer.get("/api/homework/list").status_code == 200
+
+
+def test_llm_review_without_a_service_or_with_a_failing_one_explains_why():
+    app, lecturer, aid = reviewed_setup()
+    app.extensions["transcriber"] = None
+    assert "GEMINI_API_KEY" in lecturer.post(f"/api/homework/{aid}/review/100000001", json={}).get_json()["error"]
+    app.extensions["transcriber"] = FakeReader(fail=True)
+    assert lecturer.post(f"/api/homework/{aid}/review/100000001", json={}).status_code == 400
+    assert app.test_client().post(f"/api/homework/{aid}/review/100000001", json={}).status_code == 403
+
+
+def feedback_setup(extra_students=3):
+    from test_portal import student_client
+    app, lecturer = lecturer_client()
+    aid = make_assignment(lecturer)
+    texts = {"100000001": "The determinant by expansion along the first row gives twenty one. Eigenvalues are one and three.",
+             "100000002": "Totally different words here about rank and basis of the vector space, nothing shared.",
+             "100000003": "Another independent attempt that talks about kernels and linear maps in detail.",
+             "100000004": "A fourth answer with yet other sentences about orthogonality and projections."}
+    for sid, text in list(texts.items())[:1 + extra_students]:
+        submit(app.test_client(), aid, sid, text)
+    app.extensions["transcriber"] = FakeReader()
+    return app, lecturer, aid, student_client(app, "100000001")
+
+
+def test_student_feedback_compares_with_the_class_without_exposing_anyone():
+    app, lecturer, aid, student = feedback_setup()
+    res = student.post(f"/api/homework/{aid}/my-feedback").get_json()
+    assert res["ok"] and res["compared"] and res["similarity"]["enough"] and res["similarity"]["level"] == "low"
+    prompt = app.extensions["transcriber"].prompts[0]
+    assert "do NOT quote" in prompt and "Student A" in prompt
+    assert "lecturer_solution" not in prompt and "100000002" not in prompt
+    assert "name" not in str(res["similarity"])
+
+
+def test_student_feedback_needs_enough_classmates_and_respects_the_lecturer_switch():
+    app, lecturer, aid, student = feedback_setup(extra_students=1)
+    few = student.post(f"/api/homework/{aid}/my-feedback").get_json()
+    assert few["ok"] and not few["compared"] and not few["similarity"]["enough"]
+    assert "classmates" not in app.extensions["transcriber"].prompts[0]
+    app2, lecturer2, aid2, student2 = feedback_setup()
+    lecturer2.post(f"/api/homework/{aid2}/settings", json={"allow_student_comparison": False})
+    off = student2.post(f"/api/homework/{aid2}/my-feedback").get_json()
+    assert off["ok"] and not off["compared"] and not off["comparison_allowed"]
+    assert "classmates" not in app2.extensions["transcriber"].prompts[0]
+    assert app2.test_client().post(f"/api/homework/{aid2}/settings", json={}).status_code == 403
+
+
+def test_student_feedback_requires_a_submission_and_a_login():
+    app, lecturer, aid, student = feedback_setup()
+    from test_portal import student_client
+    assert student_client(app, "100000009").post(f"/api/homework/{aid}/my-feedback").status_code == 400
+    assert app.test_client().post(f"/api/homework/{aid}/my-feedback").status_code == 401
+
+
+def test_a_copied_answer_is_reported_as_high_similarity_to_the_student():
+    from test_portal import student_client
+    app, lecturer, aid, student = feedback_setup()
+    submit(app.test_client(), aid, "100000005", "The determinant by expansion along the first row gives twenty one. Eigenvalues are one and three.")
+    res = student_client(app, "100000005").post(f"/api/homework/{aid}/my-feedback").get_json()
+    assert res["similarity"]["level"] == "high" and res["similarity"]["percent"] >= 90
