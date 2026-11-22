@@ -234,7 +234,12 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return redirect(url_for("login_page"))
         student, course = student_course_or_404(course_id)
         live = active_session(course)
-        assignments = [{"id": a.assignment_id, "title": a.title} for a in homework.courses().get(course.name, [])]
+        assignments = []
+        for a in homework.courses().get(course.name, []):
+            mine = a.submissions.get(student.student_id)
+            assignments.append({"id": a.assignment_id, "title": a.title, "submitted": mine is not None,
+                                "filename": mine.filename if mine else "", "text": mine.text if mine else "",
+                                "at": int(mine.submitted_at * 1000) if mine else 0})
         return render_template("student_course.html", student=student, course=course, live=live, assignments=assignments)
 
     @app.get("/api/course/<course_id>/summaries")

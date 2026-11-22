@@ -121,3 +121,18 @@ def test_student_home_attendance_and_scan_pages():
     assert student.get("/scan?course=i2se").status_code == 200
     anonymous = app.test_client()
     assert anonymous.get("/attend").status_code == 302 and anonymous.get("/scan").status_code == 302
+
+
+def test_student_sees_own_submission_on_the_course_page():
+    app, lecturer = setup()
+    aid = lecturer.post("/api/homework", data={"course": "Intro to Software Engineering", "title": "H1",
+                        "assignment_text": "Explain the Strategy pattern"}).get_json()["id"]
+    student = student_client(app)
+    page = student.get("/course/i2se").get_data(as_text=True)
+    assert "Not submitted yet" in page
+    assert student.post(f"/api/homework/{aid}/submit", data={"student_id": "100000001", "pin": "",
+                        "file_text": "my answer about strategy objects"}).get_json()["ok"]
+    page = student.get("/course/i2se").get_data(as_text=True)
+    assert "View my submission" in page and "my answer about strategy objects" in page
+    other = student_client(app, "100000002").get("/course/i2se").get_data(as_text=True)
+    assert "my answer about strategy objects" not in other

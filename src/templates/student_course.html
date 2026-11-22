@@ -17,12 +17,17 @@
     <textarea id="msg" maxlength="500" placeholder="A question, request or comment for the lecturer"></textarea>
     <button class="full" id="send">Send</button><div id="msgOut"></div></div>
   <div class="sec"><h3>Homework</h3>
-    {% for a in assignments %}<p><a href="/homework?assignment={{ a.id }}">{{ a.title }}</a></p>
+    {% for a in assignments %}<div style="margin-bottom:12px"><a href="/homework?assignment={{ a.id }}">{{ a.title }}</a>
+      {% if a.submitted %}<span class="muted"> · Submitted <span class="when" data-ts="{{ a.at }}"></span>{% if a.filename %} ({{ a.filename }}){% endif %}</span>
+      <details><summary>View my submission</summary><pre style="white-space:pre-wrap;unicode-bidi:plaintext">{{ a.text }}</pre>
+      <a href="/homework?assignment={{ a.id }}">Submit again to replace it</a></details>
+      {% else %}<span class="muted"> · Not submitted yet</span>{% endif %}</div>
     {% else %}<p class="muted">No open assignments.</p>{% endfor %}</div>
   <div class="sec"><h3>Lecture summaries</h3><div id="sums" class="muted">Loading…</div></div>
 </div></div>
 <script>
 const $ = id => document.getElementById(id);
+document.querySelectorAll(".when").forEach(e => { e.textContent = new Date(Number(e.dataset.ts)).toLocaleString("en-GB"); });
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 $("send").onclick = async () => {
   const res = await fetch("/api/course/{{ course.course_id }}/message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text: $("msg").value }) });
