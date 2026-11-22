@@ -28,7 +28,7 @@ Status: v2 (updated for the implemented demo)
 | UC10 | Send a comment or suggestion | Student | Light tool |
 | UC11 | View poll results and comments | Lecturer | Light tool |
 | UC12 | Add a student to the attendance after the lecture is closed | Lecturer | Secondary |
-| UC13 | Get a transcript and summary of a lecture | Lecturer | AI tool (live version in the demo) |
+| UC13 | Get a transcript and summary of a lecture (live or from a recording) | Lecturer | AI tool |
 | UC14 | Get an LLM review of homework | Student, Lecturer | AI tool |
 | UC15 | Compare homework with other students' work | Lecturer, Student | AI tool |
 | UC16 | Sign in and see my courses | Student, Lecturer | Core |
@@ -148,21 +148,22 @@ Status: v2 (updated for the implemented demo)
   3. System marks the student present and records that the entry was **added manually by the lecturer**, with the time.
 - **Notes:** Students themselves can never check in after the lecture is closed. Manual entries do not count toward the head-count comparison logic as suspects, but are shown separately in the sheet.
 
-### UC13: Get a transcript and summary of a lecture recording
+### UC13: Get a transcript and summary of a lecture (live or from a recording)
 
 - **Actor:** Lecturer
-- **Preconditions:** The lecture has a recording file (for example exported from Zoom or Meet). Optionally, the lecture slides are available.
-- **Main flow:**
-  1. Lecturer uploads the recording and, optionally, the slides.
-  2. If the file is a video, the system extracts the audio track. System sends the audio to the Speech-to-Text service and receives a raw transcript.
-  3. System sends the raw transcript, together with the slides' text as a glossary, to the LLM service, which corrects technical terms and punctuation.
-  4. System sends the corrected transcript to the LLM service and receives a summary.
-  5. Lecturer reads the transcript and summary and can edit them or download them.
+- **Preconditions:** A lecture is open. Optionally the lecture slides are available.
+- **Main flow (recording):**
+  1. Lecturer opens the transcript page of the lecture and uploads the slides (optional) and the recording (video or audio).
+  2. The browser extracts the sound from the file on the lecturer's computer and cuts it into parts of about 6 minutes.
+  3. The system sends each part to the speech service (Gemini) and receives its text; the page shows "part N of M".
+  4. The system joins the text and corrects technical terms using the slides' glossary (locally).
+  5. The system produces an extractive summary. The lecturer reads and edits the transcript and the summary and can download them.
+  6. The lecturer publishes the summary to the students of the course (optional).
+- **Main flow (live):** instead of steps 1 to 3 the lecturer records with the microphone; the browser's speech recognition produces the text and the system keeps the lecturer's voice and relevant student questions.
 - **Alternate flows:**
-  - 1a. File too large or unsupported format: the system asks for another file.
-  - 2a. Service unavailable or fails: the job is marked failed, and the lecturer can retry.
-  - 5a. Lecturer shares the summary with the class (optional).
-- **Notes:** The result is a suggestion for a human to check. In the demo the flow is live: speech recognition in the lecturer's browser, a local correction by the slides' glossary and an extractive summary that the lecturer can publish to the class; the recording upload and LLM steps above are designed, not implemented. Accuracy is measured in the tools report.
+  - 1a. File too large (over about 500 MB) or unsupported format: the page asks for another file, or for an audio-only export.
+  - 3a. The AI service is unavailable or its quota is spent: the page shows the reason and the lecturer starts again; the parts already transcribed are not kept.
+- **Notes:** The result is a suggestion for a human to check. The audio is not stored, only the text. The class must be told before a recording is transcribed (the page says so). Accuracy is measured in the tools report. Correction and summary by an LLM are designed, not implemented.
 
 ### UC14: Submit homework and get feedback
 
@@ -222,7 +223,7 @@ Status: v2 (updated for the implemented demo)
 | Can students check in after the lecture is closed? | No. Only the lecturer can add students to a closed lecture (UC12), and the entry is marked as added manually. |
 | What tolerance for the head-count gap? | 10% of the number of check-ins, configurable. Not validated: the class-photo experiment was dropped (tools report, 3.6). |
 | Are comments anonymous? | The student chooses for each comment: anonymous or with their name. |
-| Where does the lecture recording come from? | The lecturer uploads the file; there is no Zoom or Meet integration. |
-| How is the transcript kept accurate? | Demo: live speech recognition, then a local correction by sound using the slides as a glossary. Designed: a speech-to-text service and an LLM correction. Accuracy is measured on a real sample in the tools report. |
+| Where does the lecture recording come from? | The lecturer uploads the file (video or audio, up to about 500 MB); there is no Zoom or Meet integration. The sound is extracted in the lecturer's browser. |
+| How is the transcript kept accurate? | Demo: live speech recognition or Gemini speech-to-text on an uploaded recording, then a local correction by sound using the slides as a glossary. Designed: an LLM correction pass. Accuracy is measured on a real sample in the tools report. |
 | Whose homework can be compared? | The lecturer sees the comparison of submissions of one assignment. A student gets only an anonymous, general comparison with the class (no quotes, at least 3 other submissions, can be switched off by the lecturer). |
 | Is the data kept? | Not across a restart or a new deployment in the demo; see the SRS constraints. |

@@ -109,17 +109,19 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 
 ### 2.7 Transcript and summary (UC13)
 
-**Status:** implemented in the demo as a live transcript: the lecturer's browser (Chrome) turns speech into Hebrew text during the lecture; the server corrects technical terms by sound using a glossary taken from the lecturer's slides (no external service), and produces an extractive summary (the most informative sentences, in their original order). Uploading a recording, a separate ASR service and LLM correction or summarisation (FR-34, FR-34a, FR-35 as a file job, FR-36 and FR-37 with an LLM) are designed behind swappable components and are **not in the demo**.
+**Status:** implemented in the demo in two ways. (1) Live: the lecturer's browser (Chrome) turns speech into text during the lecture. (2) Recording upload: the lecturer uploads a recording (video or audio); the browser extracts the sound on the lecturer's computer, cuts it into parts of about 6 minutes and the server sends each part to an AI speech service (Gemini) for transcription. In both ways the server then corrects technical terms by sound using a glossary taken from the lecture slides (locally, no LLM), produces an extractive summary (the most informative sentences, in their original order) and the lecturer can publish the summary to the students. Correction and summarisation by an LLM are designed and not in the demo.
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
-| FR-34 | The system shall let the lecturer upload a lecture recording and optional slides. Slides (PowerPoint or PDF) are implemented; a recording upload is designed. | S | Slides: done. Recording: designed |
-| FR-34a | If the recording is a video, the system shall extract its audio track before transcription. | S | Designed |
-| FR-35 | The system shall produce a transcript. In the demo this is live speech recognition in the lecturer's browser. | S | Done (live) |
+| FR-34 | The system shall let the lecturer upload a lecture recording (video or audio, up to about 500 MB) and optional slides (PowerPoint, PDF or text). | S | Done |
+| FR-34a | If the recording is a video, the sound shall be extracted from it. In the demo this is done in the lecturer's browser, so only audio leaves the computer. | S | Done (in the browser) |
+| FR-35 | The system shall produce a transcript, live from the microphone or from an uploaded recording. | S | Done |
 | FR-36 | The system shall correct the transcript using the slides' text as a glossary of terms. In the demo the correction is local, by sound similarity, without an LLM. | S | Done (local) |
-| FR-37 | The system shall produce a summary of the corrected transcript. In the demo it is extractive and computed locally. | S | Done (extractive) |
+| FR-37 | The system shall produce a summary of the corrected transcript. In the demo it is extractive and computed locally; an LLM summary is designed. | S | Done (extractive) |
 | FR-38 | The system shall let the lecturer edit and download the transcript and summary and publish the summary to the students of the course. | S | Done |
-| FR-39 | The system shall run transcription as a background job and show its progress and failure. Applies to a recording upload. | S | Designed |
+| FR-39 | The system shall show the progress of a recording transcription (part N of M) and the reason for a failure. In the demo this is shown on the page while it runs; there is no background job that continues after the page is closed, and a failed part means starting again. | S | Done (progress on the page) |
+
+Not in the demo: a server-side background job, extracting audio on the server (for example with ffmpeg), and an LLM correction pass. The transcript of a recording includes every speaker; the lecturer-voice filter exists only in the live transcript.
 
 ### 2.8 Homework (UC14, UC15)
 
@@ -174,7 +176,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 |---|---|
 | NFR-7 | Class photos shall be deleted right after counting. Only the count is kept. |
 | NFR-8 | Location readings shall be used for verification and kept only with the check-in, to explain the result. |
-| NFR-9 | Live transcription in the lecturer's browser uses the browser's speech service (for Chrome, Google), and a recording would contain students' voices. The lecturer shall make sure the class is informed. |
+| NFR-9 | Live transcription in the lecturer's browser uses the browser's speech service (for Chrome, Google), and an uploaded recording is sent, as audio parts, to an external AI service (Gemini) and contains students' voices. The audio is not stored by the system, only the text. The lecturer shall make sure the class is informed; the transcript page says so. |
 | NFR-10 | Homework data sent to an external LLM (Gemini) shall be limited to what the review needs: names and ID numbers are removed first (FR-45), classmates are anonymous, and the screens tell the user that the text is sent to an external AI service. Students are informed that a comparison with the class is performed. The free API tier may use submitted data to improve the service, so real student data needs a paid tier or an agreement. |
 | NFR-11 | The system shall not use face recognition. |
 
