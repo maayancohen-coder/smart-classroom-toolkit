@@ -108,3 +108,16 @@ def test_logout_clears_the_login():
     assert student.get("/my").status_code == 200
     student.get("/logout")
     assert student.get("/my").status_code == 302
+
+
+def test_student_home_attendance_and_scan_pages():
+    app, lecturer = setup()
+    student = student_client(app)
+    home = student.get("/my").get_data(as_text=True)
+    assert "/attend" in home and "/homework" in home
+    assert "אין שיעור פעיל" in student.get("/attend").get_data(as_text=True)
+    open_lecture(lecturer)
+    assert "/scan?course=i2se" in student.get("/attend").get_data(as_text=True)
+    assert student.get("/scan?course=i2se").status_code == 200
+    anonymous = app.test_client()
+    assert anonymous.get("/attend").status_code == 302 and anonymous.get("/scan").status_code == 302

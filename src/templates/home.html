@@ -1,19 +1,16 @@
 {% extends "base.html" %}
+{% block who %}{% if student %}{{ student.name }} · <a href="/logout">יציאה</a>{% elif lecturer %}<a href="/logout">יציאה</a>{% endif %}{% endblock %}
 {% block body %}
-<div class="wrap"><div class="card">
-  <h1>מערכת הקורסים</h1>
-  <p class="muted">נוכחות, הערות בזמן השיעור, שיעורי בית וסיכומי שיעורים.</p>
-  {% if student %}
-    <p>שלום {{ student.name }}</p>
-    <p><a class="btn full" href="/my">הקורסים שלי</a></p>
-    <p><a class="btn secondary" href="/logout">יציאה</a></p>
-  {% elif lecturer %}
-    <p><a class="btn full" href="/lecturer">אזור המרצה</a></p>
-    <p><a class="btn secondary" href="/logout">יציאה</a></p>
-  {% else %}
-    <p><a class="btn full" href="/login">אני סטודנט</a></p>
-    <p><a class="btn secondary full" href="/login#lecturer">אני מרצה</a></p>
-    <p class="muted" style="font-size:.9rem">נוכחות בשיעור: סרקו את הקוד שמוצג על מסך המרצה בעזרת מצלמת הטלפון.</p>
-  {% endif %}
-</div></div>
+<section class="hero">
+  <h1>נוכחות, שיעורי בית ושיעורים<br>במקום אחד</h1>
+  <p>בחרו איך להיכנס.</p>
+</section>
+<nav class="tiles">
+  <a class="tile" href="{% if student %}/my{% else %}/login{% endif %}">
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/></svg></div>
+    <h2>כניסת סטודנטים</h2><p>סימון נוכחות בשיעור, הגשת שיעורי בית, הערות וסיכומי שיעורים.</p></a>
+  <a class="tile" href="{% if lecturer %}/lecturer{% else %}/login#lecturer{% endif %}">
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+    <h2>כניסת מרצים</h2><p>פתיחת שיעור, תמלול, בדיקת שיעורי בית והודעות מסטודנטים.</p></a>
+</nav>
 {% endblock %}

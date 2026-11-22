@@ -179,7 +179,25 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return redirect(url_for("login_page"))
         cards = [{"id": c.course_id, "name": c.name, "live": active_session(c) is not None}
                  for c in catalog.for_student(student.student_id)]
-        return render_template("student_courses.html", student=student, courses=cards)
+        return render_template("student_courses.html", student=student, courses=cards,
+                               live_count=sum(1 for c in cards if c["live"]))
+
+    @app.get("/attend")
+    def student_attend():
+        student = current_student()
+        if student is None:
+            return redirect(url_for("login_page"))
+        cards = [{"id": c.course_id, "name": c.name, "live": active_session(c) is not None}
+                 for c in catalog.for_student(student.student_id)]
+        return render_template("attend.html", student=student, courses=cards)
+
+    @app.get("/scan")
+    def student_scan_page():
+        student = current_student()
+        if student is None:
+            return redirect(url_for("login_page"))
+        course = catalog.get(request.args.get("course", ""))
+        return render_template("scan.html", student=student, course=course)
 
     @app.get("/course/<course_id>")
     def student_course(course_id):

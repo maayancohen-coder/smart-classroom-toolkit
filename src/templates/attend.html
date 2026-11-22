@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}סימון נוכחות{% endblock %}
+{% block who %}{{ student.name }} · <a href="/logout">יציאה</a>{% endblock %}
+{% block body %}
+<div class="back"><a href="/my">← חזרה</a></div>
+<section class="hero"><h1>סימון נוכחות</h1><p>בחרו קורס עם שיעור פעיל וסרקו את ה-QR שמוצג על מסך המרצה. יש לאשר גישה למצלמה ולמיקום.</p></section>
+<div class="section"><div class="list">
+  {% for c in courses %}
+  <div class="row"><b>{{ c.name }}</b>
+    {% if c.live %}<a class="btn" href="/scan?course={{ c.id }}">סריקת QR</a>
+    {% else %}<span class="pill idle">אין שיעור פעיל</span>{% endif %}</div>
+  {% else %}<div class="row">אין לך קורסים רשומים.</div>{% endfor %}
+</div>
+<p class="muted" style="font-size:.9rem">אפשר גם לסרוק את הקוד באפליקציית המצלמה הרגילה של הטלפון.</p></div>
+{% endblock %}
