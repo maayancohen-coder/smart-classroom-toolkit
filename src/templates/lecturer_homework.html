@@ -115,7 +115,7 @@ async function report(id) {
       ${r.has_reference ? "" : "<br>No lecturer solution was uploaded, so there is no comparison to it."}
       ${r.has_materials ? "" : "<br>No course material was uploaded, so there is no content check."}</p>
     <p><button id="commonBtn" onclick="common('${id}')">Common mistakes (AI)</button></p>
-    <pre id="commonOut" class="muted"></pre>
+    <pre id="commonOut" class="muted" dir="auto"></pre>
     ${r.common_missing.length ? `<p><b>Course terms most often missing:</b> ${r.common_missing.map(x => `${esc(x.term)} (${x.count})`).join(", ")}</p>` : ""}
     ${r.common_outside.length ? `<p><b>English terms several students used that are not in the course material:</b> ${r.common_outside.map(x => `${esc(x.term)} (${x.count})`).join(", ")}</p>` : ""}
     ${r.pairs.length ? `<h3>Very similar pairs</h3><ul>${r.pairs.map(p => `<li>${esc(p.a)} ↔ ${esc(p.b)}: <span class="tag bad">${p.percent}%</span></li>`).join("")}</ul>` : "<p>No very similar pairs found.</p>"}
@@ -138,7 +138,7 @@ function llm(id, sid, name) {
     <label style="font-weight:400"><input type="radio" name="mode" value="solution" style="width:auto"> Judge against the lecturer's solution</label>
     <label style="font-weight:400"><input type="checkbox" id="peers" checked style="width:auto"> Compare with the other students' answers (anonymous, names and ID numbers removed)</label>
     <button id="runLlm" style="margin-top:10px">Run review</button> <span id="llmState" class="muted"></span>
-    <pre id="llmOut"></pre>
+    <pre id="llmOut" dir="auto"></pre>
     <p class="muted" style="font-size:.85rem">The text is sent to an external AI service. The review is a suggestion for you to read, not a grade.</p>`;
   $("runLlm").onclick = async () => {
     $("runLlm").disabled = true; $("llmState").textContent = "Reviewing… this can take up to a minute";

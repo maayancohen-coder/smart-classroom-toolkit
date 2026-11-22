@@ -351,3 +351,12 @@ def test_ai_status_reports_the_live_answer_and_the_error():
     app.extensions["transcriber"] = None
     assert lecturer.get("/api/ai-status").get_json()["ok"] is False
     assert app.test_client().get("/api/ai-status").status_code == 403
+
+
+def test_reviews_are_requested_in_hebrew():
+    app, lecturer, aid = reviewed_setup()
+    lecturer.post(f"/api/homework/{aid}/review/100000001", json={"mode": "course_only", "peers": True})
+    lecturer.post(f"/api/homework/{aid}/common-mistakes")
+    prompts = app.extensions["transcriber"].prompts
+    assert "in Hebrew" in prompts[0] and "חוזקות" in prompts[0] and "השוואה לכיתה" in prompts[0]
+    assert "in Hebrew" in prompts[1] and "טעויות נפוצות" in prompts[1]

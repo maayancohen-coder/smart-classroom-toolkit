@@ -68,7 +68,7 @@ function show(d) {
   const classLine = !d.comparison_allowed ? "The lecturer turned off the comparison with the class for this assignment."
     : !sim.enough ? `Not enough submissions yet for an anonymous comparison (${sim.others || 0} so far, at least 3 are needed).`
     : `Similarity to the closest answer in the class: <b>${esc(sim.level)}</b> (${sim.percent}%).` + (sim.level === "high" ? " Make sure the work is your own." : "");
-  $("out").innerHTML = `<div class="res"><b>AI review</b><pre style="white-space:pre-wrap">${esc(d.review)}</pre>
+  $("out").innerHTML = `<div class="res"><b>AI review</b><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext">${esc(d.review)}</pre>
     <p>${classLine}</p>
     <p class="muted">A suggestion only, not a grade. ${d.compared ? "The comparison with the class is anonymous: no one else's text or name is shown. " : ""}Your text was sent to an external AI service.</p></div>`;
 }
