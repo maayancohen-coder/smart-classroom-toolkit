@@ -301,3 +301,43 @@ def test_a_copied_answer_is_reported_as_high_similarity_to_the_student():
     submit(app.test_client(), aid, "100000005", "The determinant by expansion along the first row gives twenty one. Eigenvalues are one and three.")
     res = student_client(app, "100000005").post(f"/api/homework/{aid}/my-feedback").get_json()
     assert res["similarity"]["level"] == "high" and res["similarity"]["percent"] >= 90
+
+
+def test_common_mistakes_prompt_lists_all_answers_anonymously():
+    app, lecturer, aid = reviewed_setup()
+    res = lecturer.post(f"/api/homework/{aid}/common-mistakes").get_json()
+    assert res["ok"] and res["count"] == 2
+    prompt = app.extensions["transcriber"].prompts[0]
+    assert "Answer 1" in prompt and "Answer 2" in prompt and "at least two answers" in prompt
+    assert "נועה לוי" not in prompt and "123456789" not in prompt and "100000001" not in prompt
+
+
+def test_common_mistakes_needs_two_submissions_and_the_lecturer_key():
+    app, lecturer = lecturer_client()
+    aid = make_assignment(lecturer)
+    submit(app.test_client(), aid, "100000001", "just one answer here")
+    app.extensions["transcriber"] = FakeReader()
+    assert lecturer.post(f"/api/homework/{aid}/common-mistakes").status_code == 400
+    assert app.test_client().post(f"/api/homework/{aid}/common-mistakes").status_code == 403
+
+
+def test_report_lists_terms_that_many_students_miss():
+    app, lecturer = lecturer_client()
+    aid = make_assignment(lecturer)
+    for i in range(1, 4):
+        submit(app.test_client(), aid, f"10000000{i}", f"answer {i} mentions only a matrix and kubernetes")
+    report = lecturer.get(f"/api/homework/{aid}/report").get_json()
+    assert "kubernetes" in {x["term"] for x in report["common_outside"]}
+    assert report["common_missing"] and report["common_missing"][0]["count"] == 3
+
+
+def test_bulk_import_reads_files_named_by_student_number():
+    app, lecturer = lecturer_client()
+    aid = make_assignment(lecturer)
+    res = lecturer.post(f"/api/homework/{aid}/bulk", data={"files": [
+        upload("determinant by expansion equals twenty one", "100000001.txt"),
+        upload("determinant is nineteen I think", "100000002.txt"),
+        upload("someone not in the class at all", "999.txt")]}, content_type="multipart/form-data").get_json()
+    assert res["saved"] == 2 and "999.txt" in res["problems"][0]
+    assert lecturer.get(f"/api/homework/{aid}/report").get_json()["count"] == 2
+    assert app.test_client().post(f"/api/homework/{aid}/bulk", data={}).status_code == 403

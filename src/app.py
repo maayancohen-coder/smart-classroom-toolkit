@@ -21,7 +21,7 @@ from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
 from attendance.handwriting import HandwritingError, build_transcriber
-from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_review_prompt,
+from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_common_mistakes_prompt, build_review_prompt,
                                  class_similarity, content_check)
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
 
@@ -560,9 +560,9 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
     MIN_TEXT_CHARS = 40
     IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
-    def read_upload(field: str) -> tuple[str, str]:
+    def read_upload(field: str, upload=None) -> tuple[str, str]:
         """Text of an uploaded file (or pasted text). Scans and photos go to the handwriting reader."""
-        upload = request.files.get(field)
+        upload = upload or request.files.get(field)
         if upload is None or not upload.filename:
             return (request.form.get(field + "_text") or "").strip(), ""
         data = upload.read(MAX_SLIDES_BYTES + 1)
@@ -728,6 +728,42 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return jsonify(ok=False, error="Please wait 30 seconds between AI reviews"), 429
         llm_last[student.student_id] = now
         return student_feedback(assignment, own)
+
+    @app.post("/api/homework/<assignment_id>/common-mistakes")
+    def api_homework_common_mistakes(assignment_id):
+        """Lecturer: the mistakes that repeat across all submissions of one assignment (AI, anonymous)."""
+        require_lecturer()
+        assignment = assignment_or_404(assignment_id)
+        if len(assignment.submissions) < 2:
+            return jsonify(ok=False, error="At least two submissions are needed to find repeating mistakes"), 400
+        text, error = run_llm(build_common_mistakes_prompt(assignment, roster_names()))
+        if text is None:
+            return jsonify(ok=False, error=error), 400
+        return jsonify(ok=True, review=text, count=len(assignment.submissions))
+
+    @app.post("/api/homework/<assignment_id>/bulk")
+    def api_homework_bulk(assignment_id):
+        """Lecturer: import many submissions at once. Each file is named <student number>.<pdf|png|jpg|txt>."""
+        require_lecturer()
+        assignment = assignment_or_404(assignment_id)
+        saved, problems = 0, []
+        for upload in request.files.getlist("files"):
+            stem = upload.filename.rsplit(".", 1)[0].strip()
+            student = service.roster.get(stem)
+            if student is None:
+                problems.append(f"{upload.filename}: the file name must be a student number from the roster")
+                continue
+            try:
+                text, filename = read_upload("files", upload)
+            except ValueError as exc:
+                problems.append(f"{upload.filename}: {exc}")
+                continue
+            if len(text) < 5:
+                problems.append(f"{upload.filename}: no text found")
+                continue
+            homework.submit(assignment, student.student_id, student.name, filename, text)
+            saved += 1
+        return jsonify(ok=saved > 0, saved=saved, problems=problems)
 
     @app.post("/api/homework/<assignment_id>/settings")
     def api_homework_settings(assignment_id):

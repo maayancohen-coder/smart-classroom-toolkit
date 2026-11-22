@@ -71,7 +71,21 @@ async function load() {
         <label>Lecturer's solution</label><input type="file" id="r_${a.id}">
         <label>Course material</label><input type="file" id="m_${a.id}">
         <button class="secondary" style="margin-top:10px" onclick="upd('${a.id}')">Save files</button> <span id="u_${a.id}"></span>
+        <label>Import submissions (file names = student numbers, e.g. 100000001.pdf)</label>
+        <input type="file" id="b_${a.id}" multiple>
+        <button class="secondary" style="margin-top:10px" onclick="bulk('${a.id}')">Import</button> <span id="bu_${a.id}"></span>
       </details></div>`).join("") : "No assignments yet";
+}
+async function bulk(id) {
+  const fd = new FormData(); for (const f of $("b_"+id).files) fd.append("files", f);
+  $("bu_"+id).textContent = "Importing… scanned files can take a while";
+  const d = await (await fetch(`/api/homework/${id}/bulk`, { method: "POST", body: fd })).json().catch(() => ({ saved: 0, problems: ["Error"] }));
+  $("bu_"+id).textContent = `${d.saved} imported` + (d.problems.length ? " · " + d.problems.join(" | ") : ""); load();
+}
+async function common(id) {
+  $("commonOut").textContent = "Analysing all submissions… this can take up to a minute";
+  const d = await (await fetch(`/api/homework/${id}/common-mistakes`, { method: "POST" })).json().catch(() => ({ ok: false, error: "Error" }));
+  $("commonOut").textContent = d.ok ? d.review : (d.error || "Error");
 }
 async function setCompare(id, value) {
   await fetch(`/api/homework/${id}/settings`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ allow_student_comparison: value }) });
@@ -91,6 +105,10 @@ async function report(id) {
       (the question text is not counted). A flag appears from ${r.threshold}%.
       ${r.has_reference ? "" : "<br>No lecturer solution was uploaded, so there is no comparison to it."}
       ${r.has_materials ? "" : "<br>No course material was uploaded, so there is no content check."}</p>
+    <p><button id="commonBtn" onclick="common('${id}')">Common mistakes (AI)</button></p>
+    <pre id="commonOut" class="muted"></pre>
+    ${r.common_missing.length ? `<p><b>Course terms most often missing:</b> ${r.common_missing.map(x => `${esc(x.term)} (${x.count})`).join(", ")}</p>` : ""}
+    ${r.common_outside.length ? `<p><b>English terms several students used that are not in the course material:</b> ${r.common_outside.map(x => `${esc(x.term)} (${x.count})`).join(", ")}</p>` : ""}
     ${r.pairs.length ? `<h3>Very similar pairs</h3><ul>${r.pairs.map(p => `<li>${esc(p.a)} ↔ ${esc(p.b)}: <span class="tag bad">${p.percent}%</span></li>`).join("")}</ul>` : "<p>No very similar pairs found.</p>"}
     <table><tr><th>Name</th><th>Similarity to lecturer's solution</th><th>Course terms used</th><th>Most similar to…</th><th>English terms outside the course</th><th>Course terms missing</th><th></th></tr>
     ${r.rows.map(x => `<tr><td>${esc(x.name)}<br><small>${esc(x.student_id)}</small></td><td>${pct(x.vs_reference)}</td><td>${pct(x.coverage)}</td>
