@@ -46,6 +46,7 @@
   <div class="row">
     <input type="file" id="recFile" accept="video/*,audio/*,.mp4,.m4a,.mp3,.wav,.webm,.mov" style="width:auto">
     <button id="upRec" type="button" class="secondary">Transcribe the recording</button>
+    <button id="keepOnly" type="button" class="secondary">Only save it for students (no transcription)</button>
     <span class="muted" id="recState"></span>
   </div>
   <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="keepRec" style="width:auto"> Also keep the recording so students can play it (after you publish the lecture; up to 100 MB, so audio is best)</label>
@@ -270,6 +271,16 @@ $("upRec").addEventListener("click", async () => {
 });
 
 if ($("delRec")) $("delRec").onclick = async e => { e.preventDefault(); await fetch(`/api/session/${SID}/recording-file`, { method: "DELETE" }); $("keptRec").textContent = "The recording was removed."; };
+$("keepOnly").addEventListener("click", async () => {
+  const file = $("recFile").files[0];
+  if (!file) { $("recState").textContent = "Choose a file first"; return; }
+  $("recState").textContent = "Saving the recording for students…"; $("keepOnly").disabled = true;
+  const fd = new FormData(); fd.append("file", file, file.name);
+  const kept = await fetch(`/api/session/${SID}/recording-file`, { method: "POST", body: fd }).then(r => r.json()).catch(() => ({ ok: false }));
+  $("keepOnly").disabled = false;
+  $("recState").textContent = "";
+  $("keptRec").textContent = kept.ok ? "A recording is saved: " + kept.name : "The recording was not saved: " + (kept.error || "error");
+});
 $("thr").addEventListener("input", () => { updateMark(); renderLive(); });
 updateMark();
 
