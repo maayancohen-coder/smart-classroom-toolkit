@@ -152,3 +152,24 @@ def test_past_lecture_can_get_a_transcript_and_students_see_it_when_published():
     lecturer.post(f"/api/session/{sid}/summary/publish", json={"published": True})
     got = student.get("/api/course/i2se/summaries").get_json()
     assert len(got) == 1 and "Strategy" in got[0]["transcript"]
+
+
+def test_recording_is_played_by_students_only_after_publishing():
+    import io as _io
+    app, lecturer = setup()
+    sid = lecturer.post("/api/course/i2se/past-lecture", json={"date": "2026-11-10"}).get_json()["session_id"]
+    lecturer.post(f"/api/session/{sid}/transcript", json={"raw": TRANSCRIPT, "glossary": "", "defaults": False})
+    bad = lecturer.post(f"/api/session/{sid}/recording-file", data={"file": (_io.BytesIO(b"x"), "a.txt", "text/plain")})
+    assert bad.status_code == 400
+    ok = lecturer.post(f"/api/session/{sid}/recording-file", data={"file": (_io.BytesIO(b"0123456789"), "a.m4a", "audio/mp4")})
+    assert ok.get_json()["ok"]
+    student, outsider = student_client(app), app.test_client()
+    assert student.get(f"/api/session/{sid}/recording").status_code in (401, 403)
+    assert lecturer.get(f"/api/session/{sid}/recording").data == b"0123456789"
+    lecturer.post(f"/api/session/{sid}/summary/publish", json={"published": True})
+    assert student.get(f"/api/session/{sid}/recording").data == b"0123456789"
+    assert student.get(f"/api/session/{sid}/recording", headers={"Range": "bytes=2-4"}).data == b"234"
+    assert outsider.get(f"/api/session/{sid}/recording").status_code in (401, 403)
+    assert student.get("/api/course/i2se/summaries").get_json()[0]["recording"].endswith("/recording")
+    lecturer.delete(f"/api/session/{sid}/recording-file")
+    assert student.get(f"/api/session/{sid}/recording").status_code == 404

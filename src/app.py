@@ -8,7 +8,7 @@ import sys
 import time
 
 from flask import (Flask, Response, abort, g, jsonify, make_response, redirect, render_template,
-                   request, session as login, url_for)
+                   request, send_file, session as login, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from attendance.config import Config
@@ -31,6 +31,7 @@ from attendance.transcript import Segment, assemble_lecturer_transcript, correct
 
 DEVICE_COOKIE = "did"
 LECTURER_COOKIE = "lk"
+MAX_RECORDING_BYTES = 100 * 1024 * 1024  # the recording students can play (memory on the free server is limited)
 MAX_AUDIO_BYTES = 20 * 1024 * 1024    # one part of a recording; the browser sends about 6 minutes
 ONE_YEAR = 60 * 60 * 24 * 365
 
@@ -253,7 +254,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         for x in sessions_of(course):
             if x.summary_published and x.transcript_corrected:
                 terms = [t.strip() for t in x.transcript_glossary.replace(",", "\n").splitlines() if t.strip()]
-                out.append({"started_at": x.started_at, "ai_text": x.summary_ai, "transcript": x.transcript_corrected, **summarize(x.transcript_corrected, terms)})
+                out.append({"started_at": x.started_at, "ai_text": x.summary_ai, "transcript": x.transcript_corrected, "recording": (f"/api/session/{x.session_id}/recording" if x.recording else ""), "video": x.recording_mime.startswith("video/"), **summarize(x.transcript_corrected, terms)})
         return jsonify(out)
 
     @app.post("/api/course/<course_id>/message")
@@ -555,6 +556,44 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         except HandwritingError as exc:
             return jsonify(ok=False, error=str(exc)), 400
         return jsonify(ok=True, text=text)
+
+    @app.post("/api/session/<session_id>/recording-file")
+    def api_recording_file(session_id):
+        """Lecturer: keep the lecture recording so that students can play it once the lecture is published."""
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        upload = request.files.get("file")
+        data = upload.read(MAX_RECORDING_BYTES + 1) if upload else b""
+        mime = (upload.mimetype if upload else "") or ""
+        if not data:
+            return jsonify(ok=False, error="The file is empty"), 400
+        if len(data) > MAX_RECORDING_BYTES:
+            return jsonify(ok=False, error="The recording is larger than 100 MB. Export only the audio and try again."), 400
+        if not mime.startswith(("audio/", "video/")):
+            return jsonify(ok=False, error="Choose an audio or video file"), 400
+        session.recording, session.recording_mime, session.recording_name = data, mime, (upload.filename or "recording")[:120]
+        return jsonify(ok=True, name=session.recording_name, size=len(data))
+
+    @app.delete("/api/session/<session_id>/recording-file")
+    def api_recording_delete(session_id):
+        require_lecturer()
+        session = get_session_or_404(session_id)
+        session.recording, session.recording_mime, session.recording_name = None, "", ""
+        return jsonify(ok=True)
+
+    @app.get("/api/session/<session_id>/recording")
+    def api_recording_play(session_id):
+        """The lecturer, or a student of the course once the lecturer has published the lecture, can play the recording."""
+        session = get_session_or_404(session_id)
+        if not session.recording:
+            abort(404)
+        student = current_student()
+        allowed = bool(student and session.summary_published and session.course_id
+                       and course_or_404(session.course_id).has_student(student.student_id))
+        if not allowed:
+            require_lecturer()
+        return send_file(io.BytesIO(session.recording), mimetype=session.recording_mime, conditional=True,
+                         download_name=session.recording_name)
 
     def session_terms(session) -> list[str]:
         return parse_glossary(session.transcript_glossary)

@@ -110,6 +110,9 @@ class LectureSession:
     summary_ai: str = ""            # a summary written by the AI service and edited by the lecturer ("" = use the extractive one)
     course_id: str = ""             # the catalog course this lecture belongs to ("" = free-text course name)
     summary_published: bool = False  # the lecturer decides when students may see the summary
+    recording: Optional[bytes] = None         # the lecture recording for students (kept in memory only when the lecturer chooses)
+    recording_mime: str = ""
+    recording_name: str = ""
     slides_name: str = ""
     slides_text: str = ""           # text of the uploaded slides (the file itself is not kept)
 

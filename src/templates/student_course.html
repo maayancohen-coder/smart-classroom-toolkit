@@ -39,7 +39,7 @@ $("send").onclick = async () => {
   const items = await (await fetch("/api/course/{{ course.course_id }}/summaries")).json();
   $("sums").innerHTML = items.length ? items.map(s => `<div class="sum"><b>${new Date(s.started_at * 1000).toLocaleDateString("en-GB")}</b>
     ${s.ai_text ? `<pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.ai_text)}</pre>`
-      : `${s.terms.length ? `<p class="muted">Key terms: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`}${s.transcript ? `<details><summary>Full transcript</summary><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.transcript)}</pre></details>` : ""}</div>`).join("")
+      : `${s.terms.length ? `<p class="muted">Key terms: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`}${s.recording ? `<p>${s.video ? `<video controls preload="none" style="width:100%;border-radius:10px" src="${s.recording}"></video>` : `<audio controls preload="none" style="width:100%" src="${s.recording}"></audio>`}</p>` : ""}${s.transcript ? `<details><summary>Full transcript</summary><pre dir="auto" style="white-space:pre-wrap;unicode-bidi:plaintext;font:inherit">${esc(s.transcript)}</pre></details>` : ""}</div>`).join("")
     + '<p class="muted" style="font-size:.85rem">Summary prepared from the lecture transcript. Not a substitute for attending the lecture.</p>'
     : "The lecturer has not published any summaries yet.";
 })();

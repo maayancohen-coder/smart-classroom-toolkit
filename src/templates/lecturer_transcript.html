@@ -48,8 +48,10 @@
     <button id="upRec" type="button" class="secondary">Transcribe the recording</button>
     <span class="muted" id="recState"></span>
   </div>
+  <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="keepRec" style="width:auto"> Also keep the recording so students can play it (after you publish the lecture; up to 100 MB, so audio is best)</label>
+  <p class="muted" id="keptRec" style="margin:4px 0">{% if session.recording_name %}A recording is saved: {{ session.recording_name }} <a href="#" id="delRec">Remove it</a>{% endif %}</p>
   <div class="meter"><div id="recBar"></div></div>
-  <p class="muted" style="font-size:.9rem">The browser extracts the sound from the file on your computer and sends only the audio, in parts of about 6 minutes, to the AI service for transcription. Nothing is stored except the text. Use Chrome; files up to about 500 MB. Tell the class before you transcribe a recording.</p>
+  <p class="muted" style="font-size:.9rem">The browser extracts the sound from the file on your computer and sends only the audio, in parts of about 6 minutes, to the AI service for transcription. Only the text is stored, unless you tick the box above to keep the recording for students. Use Chrome; files up to about 500 MB. Tell the class before you transcribe a recording.</p>
 
   <details>
     <summary>Or paste text by hand (instead of recording)</summary>
@@ -251,6 +253,12 @@ $("upRec").addEventListener("click", async () => {
       texts.push((await sendPart(wavBlob(mono.subarray(i * size, (i + 1) * size)))).trim());
       $("recBar").style.width = (100 * (i + 1) / parts) + "%";
     }
+    if ($("keepRec").checked) {
+      say("Saving the recording for students…");
+      const fd = new FormData(); fd.append("file", file, file.name);
+      const kept = await fetch(`/api/session/${SID}/recording-file`, { method: "POST", body: fd }).then(r => r.json()).catch(() => ({ ok: false }));
+      $("keptRec").textContent = kept.ok ? "A recording is saved: " + kept.name : "The recording was not saved: " + (kept.error || "error");
+    }
     segments = [];
     $("raw").value = texts.filter(Boolean).join("\n");
     $("raw").closest("details").open = true;
@@ -261,6 +269,7 @@ $("upRec").addEventListener("click", async () => {
   } finally { $("upRec").disabled = false; }
 });
 
+if ($("delRec")) $("delRec").onclick = async e => { e.preventDefault(); await fetch(`/api/session/${SID}/recording-file`, { method: "DELETE" }); $("keptRec").textContent = "The recording was removed."; };
 $("thr").addEventListener("input", () => { updateMark(); renderLive(); });
 updateMark();
 
