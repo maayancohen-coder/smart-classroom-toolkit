@@ -119,6 +119,9 @@ class SessionStore:
     def get(self, session_id: str) -> Optional[LectureSession]:
         return self._sessions.get(session_id)
 
+    def all(self) -> list[LectureSession]:
+        return sorted(self._sessions.values(), key=lambda s: s.started_at, reverse=True)
+
     def new_ticket(self, session_id: str, token_age: float, ip: str) -> CheckInTicket:
         ticket = CheckInTicket(secrets.token_urlsafe(16), session_id, time.time(), token_age, ip)
         self._tickets[ticket.nonce] = ticket

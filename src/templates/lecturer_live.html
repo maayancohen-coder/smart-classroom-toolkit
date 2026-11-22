@@ -71,6 +71,10 @@
       <tbody id="rows"></tbody>
     </table>
   </div>
+  <div class="card" style="margin-top:16px">
+    <h2 style="font-size:1.1rem;margin:0 0 8px">הערות מהסטודנטים בזמן אמת</h2>
+    <div id="notes" class="muted">עוד אין הערות.</div>
+  </div>
 </div>
 
 <script>
@@ -80,6 +84,24 @@ const LABEL = { present: "נוכח", suspect: "חשוד", absent: "נעדר" };
 const $ = id => document.getElementById(id);
 let lastUrl = null, expiresAt = 0;
 let highlighted = new Set();
+let lastNote = 0;
+async function refreshNotes() {
+  const res = await fetch(`/api/session/${SID}/notes?after=${lastNote}`);
+  if (!res.ok) return;
+  const items = await res.json();
+  if (!items.length) return;
+  const box = $("notes");
+  if (!lastNote) box.textContent = "";
+  for (const n of items) {
+    lastNote = Math.max(lastNote, n.id);
+    const row = document.createElement("div");
+    row.style.cssText = "padding:8px 0;border-bottom:1px solid var(--line)";
+    const who = document.createElement("b"); who.textContent = n.name + ": ";
+    row.append(who, document.createTextNode(n.text));
+    box.prepend(row);
+  }
+}
+setInterval(refreshNotes, 4000); refreshNotes();
 
 async function refreshQr() {
   const res = await fetch(`/api/session/${SID}/qr`);

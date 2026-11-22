@@ -5,7 +5,7 @@ import sys
 import time
 
 from flask import (Flask, Response, abort, jsonify, make_response, redirect, render_template,
-                   request, url_for)
+                   request, session as login, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from attendance.config import Config
@@ -17,6 +17,9 @@ from attendance.service import AttendanceService, CheckInError
 from attendance.tokens import TokenService
 from attendance.slides import MAX_BYTES as MAX_SLIDES_BYTES, SlidesError, extract_terms, extract_text, hebrew_words
 from attendance.terms import DEFAULT_TERMS
+from attendance.courses import Catalog
+from attendance.notes import NoteBoard, TooFast
+from attendance.summary import summarize
 from attendance.handwriting import HandwritingError, build_transcriber
 from attendance.homework import HomeworkStore, build_report, content_check
 from attendance.transcript import Segment, assemble_lecturer_transcript, correct_transcript, parse_glossary
@@ -50,6 +53,11 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         counter=build_counter(config),
     )
     app.extensions["attendance_service"] = service
+    app.secret_key = hmac.new(config.LECTURER_KEY.encode(), b"login-cookie", "sha256").hexdigest()
+    app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True, PERMANENT_SESSION_LIFETIME=60 * 60 * 12)
+    catalog = Catalog.from_json(config.COURSES_PATH, service.roster)
+    app.extensions["catalog"] = catalog
+    notes, messages = NoteBoard(), NoteBoard()
 
     # ---- helpers -----------------------------------------------------------------
     def is_lecturer() -> bool:
@@ -59,6 +67,38 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
     def require_lecturer():
         if not is_lecturer():
             abort(403)
+
+    def current_student():
+        return service.roster.get(login.get("student_id", ""))
+
+    def require_student():
+        student = current_student()
+        if student is None:
+            abort(401)
+        return student
+
+    def lecturer_courses():
+        lid = login.get("lecturer_id")
+        return catalog.for_lecturer(lid) if lid else catalog.all()
+
+    def course_or_404(course_id: str):
+        course = catalog.get(course_id)
+        if course is None:
+            abort(404)
+        return course
+
+    def student_course_or_404(course_id: str):
+        student = require_student()
+        course = course_or_404(course_id)
+        if not course.has_student(student.student_id):
+            abort(403)
+        return student, course
+
+    def sessions_of(course):
+        return [x for x in service.store.all() if x.course_id == course.course_id or (not x.course_id and x.course == course.name)]
+
+    def active_session(course):
+        return next((x for x in sessions_of(course) if not x.closed), None)
 
     def get_session_or_404(session_id: str):
         session = service.store.get(session_id)
@@ -84,7 +124,167 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
     # ---- pages -------------------------------------------------------------------
     @app.get("/")
     def home():
-        return render_template("home.html")
+        return render_template("home.html", student=current_student(), lecturer=is_lecturer())
+
+    @app.get("/login")
+    def login_page():
+        return render_template("login.html", lecturers=[{"id": l.lecturer_id, "name": l.name} for l in catalog.lecturers()],
+                               pin_required=config.REQUIRE_PIN)
+
+    @app.post("/api/login/student")
+    def api_login_student():
+        data = request.get_json(silent=True) or {}
+        student = service.roster.get(str(data.get("student_id") or "").strip())
+        if student is None:
+            return jsonify(ok=False, error="מספר הסטודנט לא נמצא ברשימה"), 400
+        if config.REQUIRE_PIN:
+            pin = str(data.get("pin") or "").strip()
+            if not (pin.isdigit() and 4 <= len(pin) <= 6):
+                return jsonify(ok=False, error="יש להזין קוד אישי (PIN) של 4-6 ספרות"), 400
+            verdict = service.pins.check_or_set(student.student_id, pin)
+            if verdict == service.pins.LOCKED:
+                return jsonify(ok=False, error="יותר מדי ניסיונות. נסו שוב בעוד כמה דקות"), 429
+            if verdict == service.pins.WRONG:
+                return jsonify(ok=False, error="הקוד האישי שגוי"), 400
+        login.clear()
+        login["student_id"] = student.student_id
+        login.permanent = True
+        return jsonify(ok=True, url="/my")
+
+    @app.post("/api/login/lecturer")
+    def api_login_lecturer():
+        data = request.get_json(silent=True) or {}
+        lecturer = catalog.lecturer(str(data.get("lecturer_id") or ""))
+        if lecturer is None or not hmac.compare_digest(str(data.get("key") or "").strip(), config.LECTURER_KEY):
+            return jsonify(ok=False, error="פרטי הכניסה שגויים"), 400
+        login.clear()
+        login["lecturer_id"] = lecturer.lecturer_id
+        login.permanent = True
+        response = jsonify(ok=True, url="/lecturer")
+        response.set_cookie(LECTURER_COOKIE, config.LECTURER_KEY, httponly=True, samesite="Lax", secure=request.is_secure)
+        return response
+
+    @app.get("/logout")
+    def logout():
+        login.clear()
+        response = make_response(redirect(url_for("home")))
+        response.delete_cookie(LECTURER_COOKIE)
+        return response
+
+    # ---- student: my courses, a course, a live lecture -------------------------------
+    @app.get("/my")
+    def student_courses():
+        student = current_student()
+        if student is None:
+            return redirect(url_for("login_page"))
+        cards = [{"id": c.course_id, "name": c.name, "live": active_session(c) is not None}
+                 for c in catalog.for_student(student.student_id)]
+        return render_template("student_courses.html", student=student, courses=cards)
+
+    @app.get("/course/<course_id>")
+    def student_course(course_id):
+        if current_student() is None:
+            return redirect(url_for("login_page"))
+        student, course = student_course_or_404(course_id)
+        live = active_session(course)
+        assignments = [{"id": a.assignment_id, "title": a.title} for a in homework.courses().get(course.name, [])]
+        return render_template("student_course.html", student=student, course=course, live=live, assignments=assignments)
+
+    @app.get("/api/course/<course_id>/summaries")
+    def api_course_summaries(course_id):
+        _, course = student_course_or_404(course_id)
+        out = []
+        for x in sessions_of(course):
+            if x.summary_published and x.transcript_corrected:
+                terms = [t.strip() for t in x.transcript_glossary.replace(",", "\n").splitlines() if t.strip()]
+                out.append({"started_at": x.started_at, **summarize(x.transcript_corrected, terms)})
+        return jsonify(out)
+
+    @app.post("/api/course/<course_id>/message")
+    def api_course_message(course_id):
+        student, course = student_course_or_404(course_id)
+        data = request.get_json(silent=True) or {}
+        try:
+            messages.add(course.course_id, student.student_id, student.name, str(data.get("text") or ""))
+        except TooFast:
+            return jsonify(ok=False, error="אפשר לשלוח הודעה אחת כל כמה שניות"), 429
+        except ValueError:
+            return jsonify(ok=False, error="ההודעה ריקה או שהתיבה מלאה"), 400
+        return jsonify(ok=True)
+
+    @app.get("/live/<session_id>")
+    def student_live(session_id):
+        student = require_student()
+        session = get_session_or_404(session_id)
+        course = catalog.get(session.course_id) if session.course_id else catalog.by_name(session.course)
+        if session.closed or course is None or not course.has_student(student.student_id):
+            abort(404)
+        return render_template("student_live.html", session=session, course=course, student=student)
+
+    @app.post("/api/session/<session_id>/note")
+    def api_note(session_id):
+        student = require_student()
+        session = get_session_or_404(session_id)
+        course = catalog.get(session.course_id) if session.course_id else catalog.by_name(session.course)
+        if session.closed or course is None or not course.has_student(student.student_id):
+            return jsonify(ok=False, error="השיעור לא פעיל"), 400
+        data = request.get_json(silent=True) or {}
+        try:
+            notes.add(session_id, student.student_id, student.name, str(data.get("text") or ""), bool(data.get("anonymous")))
+        except TooFast:
+            return jsonify(ok=False, error="אפשר לשלוח הערה אחת כל כמה שניות"), 429
+        except ValueError:
+            return jsonify(ok=False, error="ההערה ריקה או שהתיבה מלאה"), 400
+        return jsonify(ok=True)
+
+    @app.get("/api/session/<session_id>/my-notes")
+    def api_my_notes(session_id):
+        student = require_student()
+        return jsonify([{"text": n.text} for n in notes.by_student(session_id, student.student_id)])
+
+    # ---- lecturer: course page, notes, messages, summary ----------------------------
+    @app.get("/lecturer/course/<course_id>")
+    def lecturer_course(course_id):
+        require_lecturer()
+        course = course_or_404(course_id)
+        return render_template("lecturer_course.html", course=course)
+
+    @app.get("/api/course/<course_id>/inbox")
+    def api_course_inbox(course_id):
+        require_lecturer()
+        course = course_or_404(course_id)
+        return jsonify([{"name": m.name, "student_id": m.student_id, "text": m.text, "at": m.at}
+                        for m in reversed(messages.list(course.course_id))])
+
+    @app.get("/api/course/<course_id>/lectures")
+    def api_course_lectures(course_id):
+        require_lecturer()
+        course = course_or_404(course_id)
+        return jsonify([{"id": x.session_id, "started_at": x.started_at, "closed": x.closed,
+                         "present": len(x.checkins), "has_transcript": bool(x.transcript_corrected),
+                         "published": x.summary_published} for x in sessions_of(course)])
+
+    @app.get("/api/session/<session_id>/notes")
+    def api_session_notes(session_id):
+        require_lecturer()
+        get_session_or_404(session_id)
+        after = request.args.get("after", type=int) or 0
+        return jsonify([{"id": n.note_id, "name": n.name or "אנונימי", "text": n.text, "at": n.at}
+                        for n in notes.list(session_id, after)])
+
+    @app.get("/api/session/<session_id>/summary")
+    def api_session_summary(session_id):
+        require_lecturer()
+        x = get_session_or_404(session_id)
+        terms = [t.strip() for t in x.transcript_glossary.replace(",", "\n").splitlines() if t.strip()]
+        return jsonify(published=x.summary_published, **summarize(x.transcript_corrected or x.transcript_raw, terms))
+
+    @app.post("/api/session/<session_id>/summary/publish")
+    def api_summary_publish(session_id):
+        require_lecturer()
+        x = get_session_or_404(session_id)
+        x.summary_published = bool((request.get_json(silent=True) or {}).get("published"))
+        return jsonify(ok=True, published=x.summary_published)
 
     @app.get("/lecturer")
     def lecturer_setup():
@@ -97,7 +297,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
                                 secure=request.is_secure)
             return response
         require_lecturer()
-        return render_template("lecturer_setup.html", default_radius=config.DEFAULT_RADIUS_METERS)
+        return render_template("lecturer_setup.html", default_radius=config.DEFAULT_RADIUS_METERS,
+                               courses=[{"id": c.course_id, "name": c.name} for c in lecturer_courses()])
 
     @app.get("/lecturer/<session_id>")
     def lecturer_live(session_id):
@@ -173,8 +374,10 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             except (TypeError, ValueError):
                 return None
 
-        session = service.open_session(str(data.get("course") or ""), request.remote_addr or "",
+        picked = catalog.get(str(data.get("course_id") or ""))
+        session = service.open_session(picked.name if picked else str(data.get("course") or ""), request.remote_addr or "",
                                        number("lat"), number("lng"), number("radius"))
+        session.course_id = picked.course_id if picked else ""
         return jsonify(session_id=session.session_id, url=url_for("lecturer_live", session_id=session.session_id))
 
     @app.get("/api/session/<session_id>/qr")
@@ -379,7 +582,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
     @app.get("/lecturer/homework")
     def lecturer_homework():
         require_lecturer()
-        return render_template("lecturer_homework.html", reader=app.extensions["transcriber"].name if app.extensions["transcriber"] else "")
+        return render_template("lecturer_homework.html", courses=[c.name for c in lecturer_courses()], reader=app.extensions["transcriber"].name if app.extensions["transcriber"] else "")
 
     @app.get("/api/homework/list")
     def api_homework_list():
@@ -434,7 +637,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
 
     @app.get("/homework")
     def student_homework():
-        return render_template("student_homework.html")
+        return render_template("student_homework.html", student_id=login.get("student_id", ""), pick=request.args.get("assignment", ""))
 
     @app.get("/api/homework/courses")
     def api_homework_courses():

@@ -31,6 +31,8 @@ class Config:
 
     ROSTER_PATH = os.environ.get("ROSTER_PATH", os.path.join(os.path.dirname(__file__), "..", "data", "students.csv"))
 
+    COURSES_PATH = os.environ.get("COURSES_PATH", os.path.join(os.path.dirname(__file__), "..", "data", "courses.json"))
+
     # Only trust X-Forwarded-For / CF-Connecting-IP when running behind a tunnel or reverse proxy.
     TRUST_PROXY_HEADERS = os.environ.get("TRUST_PROXY_HEADERS", "1") == "1"
 

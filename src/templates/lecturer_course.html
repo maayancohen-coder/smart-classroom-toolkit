@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ course.name }}{% endblock %}
+{% block head %}<style>
+  .page { max-width: 760px; margin: 0 auto; padding: 24px 16px; } .card { margin-bottom: 16px; }
+  .item { padding: 10px 0; border-bottom: 1px solid var(--line); } small { color: var(--muted); }
+  pre { white-space: pre-wrap; background: var(--bg); padding: 10px; border-radius: 10px; }
+</style>{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="card"><p><a href="/lecturer">← אזור המרצה</a></p><h1>{{ course.name }}</h1>
+    <a class="btn secondary" href="/lecturer/homework">שיעורי בית</a></div>
+  <div class="card"><h2>הודעות מסטודנטים</h2><div id="inbox" class="muted">טוען…</div></div>
+  <div class="card"><h2>שיעורים</h2><div id="lectures" class="muted">טוען…</div><div id="sum"></div></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cid = "{{ course.course_id }}";
+async function inbox() {
+  const items = await (await fetch(`/api/course/${cid}/inbox`)).json();
+  $("inbox").innerHTML = items.length ? items.map(m => `<div class="item"><b>${esc(m.name)}</b> <small>${new Date(m.at*1000).toLocaleString("he-IL")}</small><br>${esc(m.text)}</div>`).join("") : "אין הודעות.";
+}
+async function lectures() {
+  const items = await (await fetch(`/api/course/${cid}/lectures`)).json();
+  $("lectures").innerHTML = items.length ? items.map(l => `<div class="item">${new Date(l.started_at*1000).toLocaleString("he-IL")}
+    · ${l.present} נוכחים · ${l.closed ? "הסתיים" : "<b>פעיל</b>"}
+    <a href="/lecturer/${l.id}">מסך השיעור</a>
+    ${l.has_transcript ? `<button class="secondary" onclick="show('${l.id}')">סיכום</button>
+      <button class="secondary" onclick="pub('${l.id}', ${!l.published})">${l.published ? "הסתר מסטודנטים" : "פרסם לסטודנטים"}</button>` : "<small>אין תמלול</small>"}</div>`).join("") : "עוד לא נפתחו שיעורים בקורס.";
+}
+async function show(id) {
+  const s = await (await fetch(`/api/session/${id}/summary`)).json();
+  $("sum").innerHTML = `<h3>סיכום אוטומטי ${s.published ? "(מפורסם)" : "(לא מפורסם)"}</h3><p><small>מושגים: ${esc(s.terms.join(", "))}</small></p><ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+}
+async function pub(id, value) {
+  await fetch(`/api/session/${id}/summary/publish`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ published: value }) });
+  lectures();
+}
+inbox(); lectures(); setInterval(inbox, 10000);
+</script>
+{% endblock %}

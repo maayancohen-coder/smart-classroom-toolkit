@@ -38,7 +38,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const COURSES = ["Intro to Software Engineering","Algorithms 1","Computer Networks","Probability","System Programming 1","Linear Algebra"];
+const COURSES = {{ courses|tojson }};
 const NEW = "__new__";
 $("course").innerHTML = COURSES.map(c => `<option>${esc(c)}</option>`).join("") + `<option value="${NEW}">➕ קורס אחר…</option>`;
 $("course").onchange = () => $("courseNew").style.display = $("course").value === NEW ? "" : "none";

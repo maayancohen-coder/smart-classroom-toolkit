@@ -4,11 +4,11 @@
 <div class="wrap"><div class="card">
   <h1>פתיחת שיעור</h1>
   <p class="muted">לחיצה אחת, והמערכת עושה את השאר.</p>
-  <p><a class="btn secondary" href="/lecturer/homework">שיעורי בית</a></p>
+  <p>{% for c in courses %}<a class="btn secondary" style="margin:0 0 6px 6px" href="/lecturer/course/{{ c.id }}">{{ c.name }}</a>{% endfor %}</p>
 
   <label for="course">שם הקורס</label>
-  <select id="course"></select>
-  <input id="courseNew" placeholder="שם הקורס החדש" style="display:none">
+  <select id="course">{% for c in courses %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+  <p class="muted" style="font-size:.9rem"><a href="/logout">יציאה</a></p>
 
   <label>מיקום הכיתה</label>
   <button class="secondary" id="loc" type="button">📍 השתמש במיקום שלי</button>
@@ -23,41 +23,6 @@
 <script>
 let pos = null;
 const $ = id => document.getElementById(id);
-const DEFAULT_COURSES = ["Intro to Software Engineering", "Algorithms 1", "Computer Networks",
-                         "Probability", "System Programming 1"];
-const NEW = "__new__";
-function loadCourses() {
-  let extra = [];
-  try { extra = JSON.parse(localStorage.getItem("courses") || "[]"); } catch (e) {}
-  return [...DEFAULT_COURSES, ...extra.filter(c => !DEFAULT_COURSES.includes(c))];
-}
-function renderCourses(selected) {
-  const sel = $("course");
-  sel.innerHTML = "";
-  for (const c of loadCourses()) sel.add(new Option(c, c));
-  sel.add(new Option("➕ קורס אחר…", NEW));
-  let last = "";
-  try { last = localStorage.getItem("lastCourse") || ""; } catch (e) {}
-  sel.value = selected || last;
-  if (!sel.value) sel.selectedIndex = 0;
-  $("courseNew").style.display = sel.value === NEW ? "" : "none";
-}
-$("course").onchange = () => {
-  $("courseNew").style.display = $("course").value === NEW ? "" : "none";
-};
-function chosenCourse() {
-  const name = $("course").value === NEW ? $("courseNew").value.trim() : $("course").value;
-  if (name) {
-    try {
-      localStorage.setItem("lastCourse", name);
-      const extra = JSON.parse(localStorage.getItem("courses") || "[]");
-      if (!DEFAULT_COURSES.includes(name) && !extra.includes(name))
-        localStorage.setItem("courses", JSON.stringify([...extra, name]));
-    } catch (e) {}
-  }
-  return name;
-}
-renderCourses();
 $("loc").onclick = () => {
   $("locInfo").textContent = "מאתר…";
   navigator.geolocation.getCurrentPosition(
@@ -67,12 +32,12 @@ $("loc").onclick = () => {
     { enableHighAccuracy: true, timeout: 10000 });
 };
 $("open").onclick = async () => {
-  const course = chosenCourse();
-  if (!course) { $("msg").textContent = "יש לבחור או להקליד שם קורס"; return; }
+  const course = $("course").value;
+  if (!course) { $("msg").textContent = "אין קורסים משויכים אליך"; return; }
   $("open").disabled = true;
   const res = await fetch("/api/session", { method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ course: course, radius: $("radius").value,
+    body: JSON.stringify({ course_id: course, radius: $("radius").value,
                            lat: pos && pos.latitude, lng: pos && pos.longitude }) });
   if (!res.ok) { $("msg").textContent = "שגיאה"; $("open").disabled = false; return; }
   location.href = (await res.json()).url;

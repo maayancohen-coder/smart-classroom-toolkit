@@ -1,8 +1,19 @@
 {% extends "base.html" %}
 {% block body %}
 <div class="wrap"><div class="card">
-  <h1>מערכת נוכחות</h1>
-  <p class="muted">סטודנטים: סרקו את הקוד שמוצג על מסך המרצה בעזרת מצלמת הטלפון.</p>
-  <p><a class="btn secondary" href="/homework">הגשת מטלה</a></p>
+  <h1>מערכת הקורסים</h1>
+  <p class="muted">נוכחות, הערות בזמן השיעור, שיעורי בית וסיכומי שיעורים.</p>
+  {% if student %}
+    <p>שלום {{ student.name }}</p>
+    <p><a class="btn full" href="/my">הקורסים שלי</a></p>
+    <p><a class="btn secondary" href="/logout">יציאה</a></p>
+  {% elif lecturer %}
+    <p><a class="btn full" href="/lecturer">אזור המרצה</a></p>
+    <p><a class="btn secondary" href="/logout">יציאה</a></p>
+  {% else %}
+    <p><a class="btn full" href="/login">אני סטודנט</a></p>
+    <p><a class="btn secondary full" href="/login#lecturer">אני מרצה</a></p>
+    <p class="muted" style="font-size:.9rem">נוכחות בשיעור: סרקו את הקוד שמוצג על מסך המרצה בעזרת מצלמת הטלפון.</p>
+  {% endif %}
 </div></div>
 {% endblock %}

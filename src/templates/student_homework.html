@@ -14,7 +14,7 @@
   <p class="muted">ההגשה מושווית לפתרון המרצה ולהגשות של סטודנטים אחרים באותה מטלה. ניתן להגיש שוב, וההגשה האחרונה היא שנשמרת.</p>
   <label for="course">קורס</label><select id="course"></select>
   <label for="asg">מטלה</label><select id="asg"></select>
-  <label for="sid">מספר סטודנט</label><input id="sid" inputmode="numeric" autocomplete="off">
+  <label for="sid">מספר סטודנט</label><input id="sid" inputmode="numeric" autocomplete="off" value="{{ student_id }}">
   <label for="pin">קוד אישי (PIN)</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
   <label>קובץ הפתרון (PDF או תמונה, כתב יד מותר)</label><input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.pptx">
   <label for="text">או הדביקו את הפתרון</label><textarea id="text"></textarea>
@@ -30,6 +30,8 @@ async function init() {
   data = await (await fetch("/api/homework/courses")).json();
   $("course").innerHTML = data.length ? data.map((c, i) => `<option value="${i}">${esc(c.course)}</option>`).join("") : "<option>אין מטלות פתוחות</option>";
   fill();
+  const want = "{{ pick }}";
+  if (want) data.forEach((c, i) => { if (c.assignments.some(a => a.id === want)) { $("course").value = i; fill(); $("asg").value = want; } });
 }
 function fill() { const c = data[$("course").value]; $("asg").innerHTML = c ? c.assignments.map(a => `<option value="${a.id}">${esc(a.title)}</option>`).join("") : ""; }
 $("course").onchange = fill;

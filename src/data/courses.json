@@ -1,0 +1,13 @@
+{
+  "lecturers": [
+    {"id": "maayan", "name": "מעיין כהן"}
+  ],
+  "courses": [
+    {"id": "i2se", "name": "Intro to Software Engineering", "lecturers": ["maayan"], "students": "all"},
+    {"id": "algo1", "name": "Algorithms 1", "lecturers": ["maayan"], "students": "all"},
+    {"id": "networks", "name": "Computer Networks", "lecturers": ["maayan"], "students": "all"},
+    {"id": "probability", "name": "Probability", "lecturers": ["maayan"], "students": "all"},
+    {"id": "sysprog1", "name": "System Programming 1", "lecturers": ["maayan"], "students": "all"},
+    {"id": "linear", "name": "Linear Algebra", "lecturers": ["maayan"], "students": "all"}
+  ]
+}

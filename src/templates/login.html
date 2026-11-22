@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}כניסה{% endblock %}
+{% block head %}<style>
+  .tabs { display: flex; gap: 8px; margin: 14px 0 4px; }
+  .tabs button { flex: 1; } .tabs button.on { background: var(--accent); color: #fff; }
+  select { width: 100%; font-size: 1.1rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); }
+  #msg { color: var(--bad); }
+</style>{% endblock %}
+{% block body %}
+<div class="wrap"><div class="card">
+  <h1>כניסה</h1>
+  <div class="tabs">
+    <button class="secondary on" id="tabS" type="button">סטודנט</button>
+    <button class="secondary" id="tabL" type="button">מרצה</button>
+  </div>
+  <div id="student">
+    <label for="sid">מספר סטודנט</label><input id="sid" inputmode="numeric" autocomplete="off">
+    {% if pin_required %}<label for="pin">קוד אישי (PIN)</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+    <p class="muted" style="font-size:.9rem">בכניסה הראשונה הקוד שתזינו הוא הקוד האישי שלכם, וגם משמש לנוכחות.</p>{% endif %}
+  </div>
+  <div id="lecturer" style="display:none">
+    <label for="lid">מרצה</label>
+    <select id="lid">{% for l in lecturers %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select>
+    <label for="key">מפתח מרצה</label><input id="key" type="password" autocomplete="off">
+  </div>
+  <button class="full" id="go">כניסה</button>
+  <p id="msg"></p>
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+let role = "student";
+function pick(r) {
+  role = r; $("student").style.display = r === "student" ? "" : "none"; $("lecturer").style.display = r === "lecturer" ? "" : "none";
+  $("tabS").classList.toggle("on", r === "student"); $("tabL").classList.toggle("on", r === "lecturer");
+}
+$("tabS").onclick = () => pick("student"); $("tabL").onclick = () => pick("lecturer");
+if (location.hash === "#lecturer") pick("lecturer");
+$("go").onclick = async () => {
+  $("go").disabled = true; $("msg").textContent = "";
+  const body = role === "student" ? { student_id: $("sid").value, pin: $("pin") ? $("pin").value : "" }
+                                  : { lecturer_id: $("lid").value, key: $("key").value };
+  const res = await fetch("/api/login/" + role, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (data.ok) location.href = data.url; else { $("msg").textContent = data.error || "שגיאה"; $("go").disabled = false; }
+};
+</script>
+{% endblock %}
