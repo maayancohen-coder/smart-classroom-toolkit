@@ -40,6 +40,15 @@
   <label>Heard now</label>
   <div id="live"></div>
 
+  <label for="recFile">Or upload a recording of the lecture (video or audio)</label>
+  <div class="row">
+    <input type="file" id="recFile" accept="video/*,audio/*,.mp4,.m4a,.mp3,.wav,.webm,.mov" style="width:auto">
+    <button id="upRec" type="button" class="secondary">Transcribe the recording</button>
+    <span class="muted" id="recState"></span>
+  </div>
+  <div class="meter"><div id="recBar"></div></div>
+  <p class="muted" style="font-size:.9rem">The browser extracts the sound from the file on your computer and sends only the audio, in parts of about 6 minutes, to the AI service for transcription. Nothing is stored except the text. Use Chrome; files up to about 500 MB. Tell the class before you transcribe a recording.</p>
+
   <details>
     <summary>Or paste text by hand (instead of recording)</summary>
     <textarea id="raw" placeholder="Text to paste"></textarea>
@@ -185,6 +194,57 @@ $("upSlides").addEventListener("click", async () => {
   $("glossary").value = [$("glossary").value.trim(), ...extra].filter(Boolean).join(", ");
   $("slidesState").textContent = `Read ${d.terms.length} terms from ${d.name}. You can edit the list.`;
 });
+// ---- recording upload: decode in the browser, cut into parts, transcribe each part ----
+const PART_SECONDS = 360, RATE = 16000, MAX_FILE = 500 * 1024 * 1024;
+function wavBlob(samples) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const put = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  put(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); put(8, "WAVEfmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, RATE, true); v.setUint32(28, RATE * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); put(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
+  return new Blob([buf], { type: "audio/wav" });
+}
+async function sendPart(blob, tries = 2) {
+  for (let attempt = 1; ; attempt++) {
+    const fd = new FormData(); fd.append("audio", blob, "part.wav");
+    const res = await fetch(`/api/session/${SID}/recording-chunk`, { method: "POST", body: fd }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (d.ok) return d.text;
+    if (attempt >= tries) throw new Error(d.error || "The server did not answer");
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+$("upRec").addEventListener("click", async () => {
+  const file = $("recFile").files[0], say = m => { $("recState").textContent = m; };
+  if (!file) { say("Choose a file first"); return; }
+  if (file.size > MAX_FILE) { say("The file is too large for the browser (up to about 500 MB). Cut it or export only the audio."); return; }
+  $("upRec").disabled = true; $("recBar").style.width = "0";
+  try {
+    say("Reading the sound from the file…");
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await ctx.decodeAudioData(await file.arrayBuffer());
+    ctx.close();
+    const frames = Math.ceil(decoded.duration * RATE);
+    const off = new OfflineAudioContext(1, frames, RATE);
+    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+    const mono = (await off.startRendering()).getChannelData(0);
+    const size = PART_SECONDS * RATE, parts = Math.ceil(mono.length / size), texts = [];
+    for (let i = 0; i < parts; i++) {
+      say(`Transcribing part ${i + 1} of ${parts}…`);
+      texts.push((await sendPart(wavBlob(mono.subarray(i * size, (i + 1) * size)))).trim());
+      $("recBar").style.width = (100 * (i + 1) / parts) + "%";
+    }
+    segments = [];
+    $("raw").value = texts.filter(Boolean).join("\n");
+    $("raw").closest("details").open = true;
+    say(`Done: ${parts} parts. Producing the transcript…`);
+    $("fix").click();
+  } catch (e) {
+    say("Failed: " + (e.message || e) + ". Parts already transcribed are not kept; try again.");
+  } finally { $("upRec").disabled = false; }
+});
+
 $("thr").addEventListener("input", () => { updateMark(); renderLive(); });
 updateMark();
 

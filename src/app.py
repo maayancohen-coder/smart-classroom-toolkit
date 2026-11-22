@@ -29,6 +29,7 @@ from attendance.transcript import Segment, assemble_lecturer_transcript, correct
 
 DEVICE_COOKIE = "did"
 LECTURER_COOKIE = "lk"
+MAX_AUDIO_BYTES = 20 * 1024 * 1024    # one part of a recording; the browser sends about 6 minutes
 ONE_YEAR = 60 * 60 * 24 * 365
 
 
@@ -514,6 +515,25 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         return jsonify(ok=True, raw=raw, corrected=result.text, questions=questions, dropped=dropped,
                        missing=[m for m in result.missing if m.lower() in glossary_text.lower()],
                        fixes=[{"heard": f.heard, "term": f.term} for f in result.fixes])
+
+    @app.post("/api/session/<session_id>/recording-chunk")
+    def api_recording_chunk(session_id):
+        """Lecturer: transcribe one part (a few minutes of 16 kHz WAV audio) of a lecture recording.
+        The browser cuts the recording into parts; the parts are not stored."""
+        require_lecturer()
+        get_session_or_404(session_id)
+        upload = request.files.get("audio")
+        data = upload.read(MAX_AUDIO_BYTES + 1) if upload else b""
+        if not data or len(data) > MAX_AUDIO_BYTES:
+            return jsonify(ok=False, error="The audio part is empty or too large"), 400
+        reader = app.extensions["transcriber"]
+        if reader is None:
+            return jsonify(ok=False, error="No AI service is set up. Set GEMINI_API_KEY on the server."), 400
+        try:
+            text = reader.transcribe_audio(data, "audio/wav")
+        except HandwritingError as exc:
+            return jsonify(ok=False, error=str(exc)), 400
+        return jsonify(ok=True, text=text)
 
     @app.post("/api/session/<session_id>/slides")
     def api_slides(session_id):

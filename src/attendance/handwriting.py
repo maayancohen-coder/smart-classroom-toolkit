@@ -20,6 +20,14 @@ PROMPT = (
 )
 
 
+AUDIO_PROMPT = (
+    "This is a part of a recording of a university lecture. Transcribe all the speech in the language it is spoken "
+    "(usually Hebrew with English technical terms). Write English technical terms in English letters, for example "
+    "Strategy, interface, unit test. Return plain text only: no timestamps, no speaker labels, no comments. "
+    "If there is no speech, return nothing."
+)
+
+
 class HandwritingError(Exception):
     pass
 
@@ -29,6 +37,9 @@ class Transcriber:
 
     def transcribe(self, data: bytes, mime: str) -> str:
         raise NotImplementedError
+
+    def transcribe_audio(self, data: bytes, mime: str) -> str:
+        raise HandwritingError("This AI service cannot read audio. Use GEMINI_API_KEY for lecture recordings.")
 
     def complete(self, prompt: str) -> str:
         """Plain text in, text out (used for the homework review)."""
@@ -71,12 +82,18 @@ class GeminiTranscriber(Transcriber):
                       if "generateContent" in m.get("supportedGenerationMethods", []))
 
     def transcribe(self, data: bytes, mime: str) -> str:
+        return self._read(data, mime, PROMPT)
+
+    def transcribe_audio(self, data: bytes, mime: str) -> str:
+        return self._read(data, mime, AUDIO_PROMPT)
+
+    def _read(self, data: bytes, mime: str, prompt: str) -> str:
         generation = {"temperature": 0}
         if self.thinking and self.model.startswith("gemini-3"):
             generation["thinkingConfig"] = {"thinkingLevel": "low"}   # reading text needs no long reasoning
         body = json.dumps({"contents": [{"parts": [
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("ascii")}},
-            {"text": PROMPT}]}], "generationConfig": generation}).encode("utf-8")
+            {"text": prompt}]}], "generationConfig": generation}).encode("utf-8")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         request = urllib.request.Request(url, data=body, method="POST", headers={
             "content-type": "application/json", "x-goog-api-key": self.api_key})
