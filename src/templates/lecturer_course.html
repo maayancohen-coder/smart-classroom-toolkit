@@ -7,10 +7,10 @@
 </style>{% endblock %}
 {% block body %}
 <div class="page">
-  <div class="card"><p><a href="/lecturer">← אזור המרצה</a></p><h1>{{ course.name }}</h1>
-    <a class="btn secondary" href="/lecturer/homework">שיעורי בית</a></div>
-  <div class="card"><h2>הודעות מסטודנטים</h2><div id="inbox" class="muted">טוען…</div></div>
-  <div class="card"><h2>שיעורים</h2><div id="lectures" class="muted">טוען…</div><div id="sum"></div></div>
+  <div class="card"><p><a href="/lecturer">← Lecturer area</a></p><h1>{{ course.name }}</h1>
+    <a class="btn secondary" href="/lecturer/homework">Homework</a></div>
+  <div class="card"><h2>Messages from students</h2><div id="inbox" class="muted">Loading…</div></div>
+  <div class="card"><h2>Lectures</h2><div id="lectures" class="muted">Loading…</div><div id="sum"></div></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -18,19 +18,19 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const cid = "{{ course.course_id }}";
 async function inbox() {
   const items = await (await fetch(`/api/course/${cid}/inbox`)).json();
-  $("inbox").innerHTML = items.length ? items.map(m => `<div class="item"><b>${esc(m.name)}</b> <small>${new Date(m.at*1000).toLocaleString("he-IL")}</small><br>${esc(m.text)}</div>`).join("") : "אין הודעות.";
+  $("inbox").innerHTML = items.length ? items.map(m => `<div class="item"><b>${esc(m.name)}</b> <small>${new Date(m.at*1000).toLocaleString("en-GB")}</small><br>${esc(m.text)}</div>`).join("") : "No messages.";
 }
 async function lectures() {
   const items = await (await fetch(`/api/course/${cid}/lectures`)).json();
-  $("lectures").innerHTML = items.length ? items.map(l => `<div class="item">${new Date(l.started_at*1000).toLocaleString("he-IL")}
-    · ${l.present} נוכחים · ${l.closed ? "הסתיים" : "<b>פעיל</b>"}
-    <a href="/lecturer/${l.id}">מסך השיעור</a>
-    ${l.has_transcript ? `<button class="secondary" onclick="show('${l.id}')">סיכום</button>
-      <button class="secondary" onclick="pub('${l.id}', ${!l.published})">${l.published ? "הסתר מסטודנטים" : "פרסם לסטודנטים"}</button>` : "<small>אין תמלול</small>"}</div>`).join("") : "עוד לא נפתחו שיעורים בקורס.";
+  $("lectures").innerHTML = items.length ? items.map(l => `<div class="item">${new Date(l.started_at*1000).toLocaleString("en-GB")}
+    · ${l.present} present · ${l.closed ? "Ended" : "<b>Active</b>"}
+    <a href="/lecturer/${l.id}">Lecture screen</a>
+    ${l.has_transcript ? `<button class="secondary" onclick="show('${l.id}')">Summary</button>
+      <button class="secondary" onclick="pub('${l.id}', ${!l.published})">${l.published ? "Hide from students" : "Publish to students"}</button>` : "<small>No transcript</small>"}</div>`).join("") : "No lectures have been opened in this course yet.";
 }
 async function show(id) {
   const s = await (await fetch(`/api/session/${id}/summary`)).json();
-  $("sum").innerHTML = `<h3>סיכום אוטומטי ${s.published ? "(מפורסם)" : "(לא מפורסם)"}</h3><p><small>מושגים: ${esc(s.terms.join(", "))}</small></p><ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  $("sum").innerHTML = `<h3>Automatic summary ${s.published ? "(published)" : "(not published)"}</h3><p><small>Key terms: ${esc(s.terms.join(", "))}</small></p><ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
 }
 async function pub(id, value) {
   await fetch(`/api/session/${id}/summary/publish`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ published: value }) });

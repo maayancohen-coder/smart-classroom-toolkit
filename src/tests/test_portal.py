@@ -43,9 +43,9 @@ def test_student_sees_only_their_courses_and_a_live_badge():
     app, lecturer = setup()
     student = student_client(app)
     page = student.get("/my").get_data(as_text=True)
-    assert "Intro to Software Engineering" in page and "שיעור פעיל" not in page
+    assert "Intro to Software Engineering" in page and "Active lecture" not in page
     open_lecture(lecturer)
-    assert "שיעור פעיל" in student.get("/my").get_data(as_text=True)
+    assert "Active lecture" in student.get("/my").get_data(as_text=True)
 
 
 def test_live_notes_reach_the_lecturer_and_anonymous_hides_the_name():
@@ -57,7 +57,7 @@ def test_live_notes_reach_the_lecturer_and_anonymous_hides_the_name():
     assert two.post(f"/api/session/{sid}/note", json={"text": "מהר מדי", "anonymous": True}).get_json()["ok"]
     notes = lecturer.get(f"/api/session/{sid}/notes").get_json()
     assert [n["text"] for n in notes] == ["לא הבנתי את הדוגמה", "מהר מדי"]
-    assert notes[0]["name"] != "אנונימי" and notes[1]["name"] == "אנונימי"
+    assert notes[0]["name"] != "Anonymous" and notes[1]["name"] == "Anonymous"
     assert lecturer.get(f"/api/session/{sid}/notes?after=1").get_json()[0]["text"] == "מהר מדי"
     assert [n["text"] for n in one.get(f"/api/session/{sid}/my-notes").get_json()] == ["לא הבנתי את הדוגמה"]
 
@@ -115,7 +115,7 @@ def test_student_home_attendance_and_scan_pages():
     student = student_client(app)
     home = student.get("/my").get_data(as_text=True)
     assert "/attend" in home and "/homework" in home
-    assert "אין שיעור פעיל" in student.get("/attend").get_data(as_text=True)
+    assert "No active lecture" in student.get("/attend").get_data(as_text=True)
     open_lecture(lecturer)
     assert "/scan?course=i2se" in student.get("/attend").get_data(as_text=True)
     assert student.get("/scan?course=i2se").status_code == 200

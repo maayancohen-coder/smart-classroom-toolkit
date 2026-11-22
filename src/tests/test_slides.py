@@ -96,7 +96,7 @@ def test_slide_words_make_a_student_question_relevant(env):
         {"text": "מה זה הממשק", "level": 0.03, "t0": 2, "t1": 5},
         {"text": "זה חוזה בין מחלקות", "level": 0.2, "t0": 5, "t1": 8}]}
     data = lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()
-    assert data["questions"] == 1 and "[שאלה מהכיתה] מה זה הממשק" in data["corrected"]
+    assert data["questions"] == 1 and "[Student question] מה זה הממשק" in data["corrected"]
 
 
 def test_hebrew_words_helper():

@@ -1,24 +1,24 @@
 {% extends "base.html" %}
-{% block title %}סימון נוכחות{% endblock %}
+{% block title %}Mark attendance{% endblock %}
 {% block body %}
 <div class="wrap"><div class="card" id="card">
   <h1>{{ course }}</h1>
-  <p class="muted" id="status">סימון נוכחות</p>
+  <p class="muted" id="status">Mark attendance</p>
 
   <div id="idBox" {% if known_name %}hidden{% endif %}>
-    <label for="sid">מספר סטודנט / ת״ז</label>
-    <input id="sid" inputmode="numeric" autocomplete="off" placeholder="לדוגמה 100000001">
-    <p class="muted" style="font-size:.9rem">פעם אחת בלבד – הטלפון ייקשר אליך.</p>
+    <label for="sid">Student number</label>
+    <input id="sid" inputmode="numeric" autocomplete="off" placeholder="e.g. 100000001">
+    <p class="muted" style="font-size:.9rem">Only once. This phone will be linked to you.</p>
   </div>
-  {% if known_name %}<p style="font-size:1.15rem">שלום <strong>{{ known_name }}</strong></p>{% endif %}
+  {% if known_name %}<p style="font-size:1.15rem">Hello <strong>{{ known_name }}</strong></p>{% endif %}
 
-  <label for="pin">קוד אישי (4–6 ספרות)</label>
+  <label for="pin">Personal PIN (4-6 digits)</label>
   <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="••••">
-  <p class="muted" style="font-size:.9rem">בפעם הראשונה בחרו קוד וזכרו אותו – בכל סימון הבא תזינו אותו שוב.</p>
+  <p class="muted" style="font-size:.9rem">The first time, pick a PIN and remember it. You will enter it again at every check-in.</p>
 
-  <button class="full" id="go">סמן נוכחות</button>
+  <button class="full" id="go">Mark attendance</button>
   <p id="msg" role="status"></p>
-  <p class="muted" style="font-size:.75rem">מכשיר: {{ device_tag }} · {{ "חדש" if device_new else "מוכר" }}</p>
+  <p class="muted" style="font-size:.75rem">Device: {{ device_tag }} · {{ "new" if device_new else "known" }}</p>
 </div></div>
 
 <script>
@@ -67,11 +67,11 @@ async function fingerprint() {
 $("go").addEventListener("click", async () => {
   const msg = $("msg"), btn = $("go");
   const sid = $("sid") ? $("sid").value.trim() : "";
-  if (!KNOWN && !sid) { msg.textContent = "יש להזין מספר סטודנט"; return; }
+  if (!KNOWN && !sid) { msg.textContent = "Enter your student number"; return; }
   const pin = $("pin").value.trim();
-  if (!/^\d{4,6}$/.test(pin)) { msg.textContent = "יש להזין קוד אישי של 4 עד 6 ספרות"; return; }
+  if (!/^\d{4,6}$/.test(pin)) { msg.textContent = "Enter a personal PIN of 4 to 6 digits"; return; }
   btn.disabled = true;
-  msg.textContent = NEEDS_LOCATION ? "מאמת מיקום… (אשרו גישה למיקום)" : "שולח…";
+  msg.textContent = NEEDS_LOCATION ? "Checking location… (allow location access)" : "Sending…";
   const loc = NEEDS_LOCATION ? await collectLocation() : { samples: [], denied: false };
   const fp = await fingerprint();
   try {
@@ -82,13 +82,13 @@ $("go").addEventListener("click", async () => {
     });
     const data = await res.json();
     if (data.ok) {
-      $("card").innerHTML = '<h1>✓ הנוכחות נרשמה</h1><p>' + data.name +
-        (data.duplicate ? '<br><span class="muted">כבר סומנת קודם בשיעור הזה.</span>' : '') + '</p>';
+      $("card").innerHTML = '<h1>✓ Attendance recorded</h1><p>' + data.name +
+        (data.duplicate ? '<br><span class="muted">You were already marked in this lecture.</span>' : '') + '</p>';
     } else {
       msg.textContent = data.error; btn.disabled = false;
     }
   } catch (e) {
-    msg.textContent = "שגיאת רשת, נסו שוב"; btn.disabled = false;
+    msg.textContent = "Network error, try again"; btn.disabled = false;
   }
 });
 </script>

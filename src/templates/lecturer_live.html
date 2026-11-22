@@ -15,7 +15,7 @@
   .pill.suspect { background: var(--warn-bg); color: var(--warn); }
   .pill.absent { background: var(--bad-bg); color: var(--bad); }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; font-size: .85rem; }
   td.notes { color: var(--muted); font-size: .9rem; }
   .tag { padding: 2px 10px; border-radius: 999px; font-size: .85rem; font-weight: 700; white-space: nowrap; }
@@ -39,26 +39,26 @@
 <div class="layout">
   <div class="card">
     <h1>{{ session.course }}</h1>
-    <p class="muted" id="hint">סרקו את הקוד כדי לסמן נוכחות</p>
+    <p class="muted" id="hint">Scan the code to mark attendance</p>
     <div id="qr"></div>
     <div class="bar"><div id="timer"></div></div>
     <div class="actions">
       <a class="btn secondary" href="/api/session/{{ session.session_id }}/report.xlsx">Excel</a>
       <a class="btn secondary" href="/api/session/{{ session.session_id }}/report.csv">CSV</a>
-      <a class="btn secondary" href="/lecturer/{{ session.session_id }}/transcript">תמלול</a>
-      <button class="secondary" id="close">סגור שיעור</button>
+      <a class="btn secondary" href="/lecturer/{{ session.session_id }}/transcript">Transcript</a>
+      <button class="secondary" id="close">Close lecture</button>
     </div>
     <div class="hc">
-      <h2>ספירת נוכחים מתמונה</h2>
-      <p class="muted" style="font-size:.9rem;margin:0">צלמו את הכיתה. המערכת רק סופרת אנשים ולא מזהה פנים, והתמונה נמחקת מיד אחרי הספירה.</p>
+      <h2>Head count from a photo</h2>
+      <p class="muted" style="font-size:.9rem;margin:0">Take a photo of the class. The system only counts people, does not recognize faces, and deletes the photo right after counting.</p>
       <div class="row" id="photoRow">
         <input type="file" id="photo" accept="image/*" capture="environment">
-        <button id="countBtn" type="button">ספור מהתמונה</button>
+        <button id="countBtn" type="button">Count from the photo</button>
       </div>
       <div class="row">
-        <label for="manual" style="margin:0">או הזינו ידנית:</label>
+        <label for="manual" style="margin:0">Or enter by hand:</label>
         <input type="number" id="manual" min="0">
-        <button class="secondary" id="manualBtn" type="button">עדכן</button>
+        <button class="secondary" id="manualBtn" type="button">Update</button>
       </div>
       <p id="hcMsg" class="muted" style="font-size:.9rem"></p>
       <div id="gapbox" class="gapbox" hidden></div>
@@ -67,20 +67,20 @@
   <div class="card">
     <div class="counts" id="counts"></div>
     <table>
-      <thead><tr><th>סטטוס</th><th>שם</th><th>שעה</th><th>מרחק</th><th>הערות</th><th></th></tr></thead>
+      <thead><tr><th>Status</th><th>Name</th><th>Time</th><th>Distance</th><th>Notes</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
   <div class="card" style="margin-top:16px">
-    <h2 style="font-size:1.1rem;margin:0 0 8px">הערות מהסטודנטים בזמן אמת</h2>
-    <div id="notes" class="muted">עוד אין הערות.</div>
+    <h2 style="font-size:1.1rem;margin:0 0 8px">Live notes from students</h2>
+    <div id="notes" class="muted">No notes yet.</div>
   </div>
 </div>
 
 <script>
 const SID = {{ session.session_id|tojson }};
 const PERIOD = {{ period }};
-const LABEL = { present: "נוכח", suspect: "חשוד", absent: "נעדר" };
+const LABEL = { present: "Present", suspect: "Suspect", absent: "Absent" };
 const $ = id => document.getElementById(id);
 let lastUrl = null, expiresAt = 0;
 let highlighted = new Set();
@@ -108,7 +108,7 @@ async function refreshQr() {
   if (!res.ok) return;
   const d = await res.json();
   expiresAt = Date.now() + d.expires_in * 1000;
-  if (d.closed) { $("qr").innerHTML = ""; $("hint").textContent = "השיעור נסגר"; return; }
+  if (d.closed) { $("qr").innerHTML = ""; $("hint").textContent = "The lecture is closed"; return; }
   if (d.url !== lastUrl) {
     lastUrl = d.url;
     const qr = qrcode(0, "M"); qr.addData(d.url); qr.make();
@@ -134,10 +134,10 @@ async function refreshReport() {
   $("rows").innerHTML = d.rows.map(r => {
     const t = r.time ? new Date(r.time * 1000).toLocaleTimeString("he-IL") : "";
     return `<tr class="${highlighted.has(r.student_id) ? "hl" : ""}"><td><span class="tag ${r.status}">${LABEL[r.status]}</span></td>
-      <td>${esc(r.name)}</td><td>${t}</td><td>${r.distance_m != null ? r.distance_m + " מ׳" : ""}</td>
+      <td>${esc(r.name)}</td><td>${t}</td><td>${r.distance_m != null ? r.distance_m + " m" : ""}</td>
       <td class="notes">${esc(r.notes)}</td>
-      <td>${r.approved ? `<button class="secondary" data-approve="0" data-sid="${esc(r.student_id)}">בטל אישור</button>`
-          : r.status === "suspect" ? `<button class="secondary" data-approve="1" data-sid="${esc(r.student_id)}">אשר נוכחות</button>` : ""}</td></tr>`;
+      <td>${r.approved ? `<button class="secondary" data-approve="0" data-sid="${esc(r.student_id)}">Undo approval</button>`
+          : r.status === "suspect" ? `<button class="secondary" data-approve="1" data-sid="${esc(r.student_id)}">Approve attendance</button>` : ""}</td></tr>`;
   }).join("");
 }
 $("rows").addEventListener("click", async e => {
@@ -149,18 +149,18 @@ $("rows").addEventListener("click", async e => {
   refreshReport();
 });
 const VERDICT = {
-  ok: "הפער בטווח הסביר.",
-  gap: "פער חריג: ייתכן שחלק מהנרשמים לא היו בכיתה. הנרשמים עם הכי הרבה סימנים חשודים מסומנים בצהוב.",
-  more_counted: "נספרו יותר אנשים ממי שסימן נוכחות (למשל סטודנטים שלא סימנו, או המרצה)."
+  ok: "The gap is within the expected range.",
+  gap: "Unusual gap: some of the people who checked in may not have been in the room. Those with the most suspicious signs are marked in yellow.",
+  more_counted: "More people were counted than checked in (for example students who did not check in, or the lecturer)."
 };
 function showGap(h) {
   const box = $("gapbox");
   if (!h) { box.hidden = true; return; }
   box.hidden = false;
   box.className = "gapbox " + (h.verdict === "gap" ? "gap" : h.verdict === "ok" ? "ok" : "");
-  const how = h.method === "manual" ? "הוזן ידנית" : "נספר מתמונה" + (h.confidence ? ` (ודאות: ${esc(h.confidence)})` : "");
-  box.innerHTML = `נספרו בכיתה: <b>${h.counted}</b> · סימנו נוכחות: <b>${h.checkins}</b> · פער: <b>${h.gap}</b>` +
-    ` (מותר עד ${h.allowed})<br>${VERDICT[h.verdict]}<br><span class="muted">${how}${h.note ? " · " + esc(h.note) : ""}</span>`;
+  const how = h.method === "manual" ? "Entered by hand" : "Counted from a photo" + (h.confidence ? ` (confidence: ${esc(h.confidence)})` : "");
+  box.innerHTML = `Counted in the room: <b>${h.counted}</b> · Checked in: <b>${h.checkins}</b> · Gap: <b>${h.gap}</b>` +
+    ` (allowed up to ${h.allowed})<br>${VERDICT[h.verdict]}<br><span class="muted">${how}${h.note ? " · " + esc(h.note) : ""}</span>`;
 }
 // Shrink the photo in the browser first: faster upload, and a phone photo can be several MB.
 async function shrink(file, maxSide = 1600) {
@@ -172,27 +172,27 @@ async function shrink(file, maxSide = 1600) {
   return new Promise(res => canvas.toBlob(res, "image/jpeg", 0.85));
 }
 async function sendHeadcount(body) {
-  $("hcMsg").textContent = "סופר… זה יכול לקחת עד כשתי דקות";
+  $("hcMsg").textContent = "Counting… this can take up to two minutes";
   const res = await fetch(`/api/session/${SID}/headcount`, { method: "POST", body });
   const d = await res.json().catch(() => ({}));
-  $("hcMsg").textContent = res.ok ? "" : (d.error || "שגיאה");
+  $("hcMsg").textContent = res.ok ? "" : (d.error || "Error");
   refreshReport();
 }
 $("countBtn").onclick = async () => {
   const f = $("photo").files[0];
-  if (!f) { $("hcMsg").textContent = "בחרו תמונה"; return; }
+  if (!f) { $("hcMsg").textContent = "Choose a photo"; return; }
   const form = new FormData();
   form.append("photo", await shrink(f), "class.jpg");
   sendHeadcount(form);
 };
 $("manualBtn").onclick = () => {
   const v = $("manual").value;
-  if (v === "") { $("hcMsg").textContent = "הזינו מספר"; return; }
+  if (v === "") { $("hcMsg").textContent = "Enter a number"; return; }
   const form = new FormData(); form.append("count", v);
   sendHeadcount(form);
 };
 $("close").onclick = async () => {
-  if (!confirm("לסגור את השיעור? לא ניתן יהיה לסמן נוכחות יותר.")) return;
+  if (!confirm("Close the lecture? Attendance can no longer be marked.")) return;
   await fetch(`/api/session/${SID}/close`, { method: "POST" });
   refreshQr();
 };

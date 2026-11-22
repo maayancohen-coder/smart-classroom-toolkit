@@ -216,6 +216,6 @@ def assemble_lecturer_transcript(segments: list[Segment], threshold: float, term
                   or _words(seg.text) & set(context_words)):
             dropped.append({"text": seg.text, "reason": "question not related to the lecturer's answer"})
         else:
-            lines.append("[שאלה מהכיתה] " + seg.text)
+            lines.append("[Student question] " + seg.text)
             questions += 1
     return Assembled(" ".join(lines), questions, dropped)

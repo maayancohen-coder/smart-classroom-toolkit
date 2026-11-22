@@ -86,11 +86,11 @@ class AttendanceService:
     def scan(self, session_id: str, slot: int, signature: str, ip: str) -> CheckInTicket:
         session = self.store.get(session_id)
         if session is None or session.closed:
-            raise CheckInError("השיעור לא פעיל")
+            raise CheckInError("The lecture is not active")
         verdict = self.tokens.verify(session.secret, session_id, slot, signature)
         if not verdict.valid:
             session.rejected.append(RejectedAttempt(time.time(), ip, verdict.reason))
-            raise CheckInError("הקוד פג תוקף. סרקו שוב את הקוד שעל המסך.")
+            raise CheckInError("The code expired. Scan the code on the screen again.")
         return self.store.new_ticket(session_id, verdict.age_seconds, ip)
 
     def check_in(self, nonce: str, device_id: str, student_id: Optional[str],
@@ -98,35 +98,35 @@ class AttendanceService:
                  client_now: Optional[float] = None, pin: Optional[str] = None) -> CheckInOutcome:
         ticket = self.store.consume_ticket(nonce, self.config.TICKET_TTL_SECONDS)
         if ticket is None:
-            raise CheckInError("פג הזמן לסימון. סרקו שוב את הקוד שעל המסך.")
+            raise CheckInError("Time ran out. Scan the code on the screen again.")
         session = self.store.get(ticket.session_id)
         if session is None or session.closed:
-            raise CheckInError("השיעור לא פעיל")
+            raise CheckInError("The lecture is not active")
 
         student_id = student_id or self.registry.student_for_device(device_id)
         student = self.roster.get(student_id) if student_id else None
         if student is None:
             ticket.used = False  # let them fix a typo without rescanning
-            raise CheckInError("מספר הסטודנט לא נמצא ברשימת הכיתה")
+            raise CheckInError("Student number not found in the class roster")
 
         if self.config.BLOCK_WITHOUT_LOCATION and session.has_geofence \
                 and (location.denied or not location.samples):
             ticket.used = False
-            raise CheckInError("יש לאשר גישה למיקום בדפדפן כדי לסמן נוכחות. אשרו ונסו שוב.")
+            raise CheckInError("Allow location access in the browser to mark attendance, then try again.")
 
         pin_verified = False
         if self.config.REQUIRE_PIN:
             pin = (pin or "").strip()
             if not (pin.isdigit() and 4 <= len(pin) <= 6):
                 ticket.used = False
-                raise CheckInError("יש להזין קוד אישי של 4 עד 6 ספרות")
+                raise CheckInError("Enter a personal PIN of 4 to 6 digits")
             verdict = self.pins.check_or_set(student.student_id, pin)
             if verdict == PinStore.LOCKED:
                 ticket.used = False
-                raise CheckInError("יותר מדי ניסיונות שגויים. נסו שוב בעוד כמה דקות או פנו למרצה.")
+                raise CheckInError("Too many wrong attempts. Try again in a few minutes or ask the lecturer.")
             if verdict == PinStore.WRONG:
                 ticket.used = False
-                raise CheckInError("קוד אישי שגוי")
+                raise CheckInError("Wrong PIN")
             pin_verified = True
 
         if student.student_id in session.checkins:
@@ -161,7 +161,7 @@ class AttendanceService:
     def count_photo(self, session: LectureSession, image: bytes, mime: str) -> CountResult:
         """Count people in the photo. The image bytes are not stored anywhere; only the number is kept."""
         if self.counter is None:
-            raise CheckInError("לא הוגדר שירות ספירה. אפשר להזין את המספר ידנית.")
+            raise CheckInError("No counting service is set up. You can enter the number by hand.")
         result = self.counter.count(image, mime)
         self.record_head_count(session, result)
         return result
@@ -185,7 +185,7 @@ class AttendanceService:
         reasons stay visible. Undoing restores what the checks had decided."""
         checkin = session.checkins.get(student_id)
         if checkin is None:
-            raise CheckInError("הסטודנט לא סימן נוכחות בשיעור הזה")
+            raise CheckInError("The student did not check in to this lecture")
         if approved and not checkin.approved_by_lecturer:
             checkin.original_status = checkin.status
             checkin.approved_by_lecturer = True

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}הגשת מטלה{% endblock %}
+{% block title %}Submit assignment{% endblock %}
 {% block head %}<style>
   select { width: 100%; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); }
@@ -10,16 +10,16 @@
 </style>{% endblock %}
 {% block body %}
 <div class="wrap"><div class="card">
-  <h1>הגשת מטלה</h1>
-  <p class="muted">ההגשה מושווית לפתרון המרצה ולהגשות של סטודנטים אחרים באותה מטלה. ניתן להגיש שוב, וההגשה האחרונה היא שנשמרת.</p>
-  <label for="course">קורס</label><select id="course"></select>
-  <label for="asg">מטלה</label><select id="asg"></select>
-  <label for="sid">מספר סטודנט</label><input id="sid" inputmode="numeric" autocomplete="off" value="{{ student_id }}">
-  <label for="pin">קוד אישי (PIN)</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
-  <label>קובץ הפתרון (PDF או תמונה, כתב יד מותר)</label><input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.pptx">
-  <label for="text">או הדביקו את הפתרון</label><textarea id="text"></textarea>
-  <button class="secondary full" id="check">בדיקה לפי חומר הקורס (לא נשמר)</button>
-  <button class="full" id="send">הגשה</button>
+  <h1>Submit assignment</h1>
+  <p class="muted">Your submission is compared with the lecturer's solution and with other students' submissions for the same assignment. You can submit again; the last submission is kept.</p>
+  <label for="course">Course</label><select id="course"></select>
+  <label for="asg">Assignment</label><select id="asg"></select>
+  <label for="sid">Student number</label><input id="sid" inputmode="numeric" autocomplete="off" value="{{ student_id }}">
+  <label for="pin">Personal PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+  <label>Solution file (PDF or image, handwriting allowed)</label><input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.pptx">
+  <label for="text">Or paste the solution</label><textarea id="text"></textarea>
+  <button class="secondary full" id="check">Check against the course material (not saved)</button>
+  <button class="full" id="send">Submit</button>
   <div id="out"></div>
 </div></div>
 <script>
@@ -28,7 +28,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 let data = [];
 async function init() {
   data = await (await fetch("/api/homework/courses")).json();
-  $("course").innerHTML = data.length ? data.map((c, i) => `<option value="${i}">${esc(c.course)}</option>`).join("") : "<option>אין מטלות פתוחות</option>";
+  $("course").innerHTML = data.length ? data.map((c, i) => `<option value="${i}">${esc(c.course)}</option>`).join("") : "<option>No open assignments</option>";
   fill();
   const want = "{{ pick }}";
   if (want) data.forEach((c, i) => { if (c.assignments.some(a => a.id === want)) { $("course").value = i; fill(); $("asg").value = want; } });
@@ -41,26 +41,26 @@ function form() {
   return fd;
 }
 async function post(url, fd, btn) {
-  $("out").innerHTML = '<div class="res">שולח… (קובץ סרוק או בכתב יד עלול לקחת עד דקה)</div>';
+  $("out").innerHTML = '<div class="res">Sending… (a scanned or handwritten file can take up to a minute)</div>';
   btn.disabled = true;
   try { const res = await fetch(url, { method: "POST", body: fd }); return await res.json(); }
-  catch (e) { return { ok: false, error: "בעיית רשת" }; } finally { btn.disabled = false; }
+  catch (e) { return { ok: false, error: "Network problem" }; } finally { btn.disabled = false; }
 }
 $("check").onclick = async () => {
   if (!$("asg").value) return;
   const d = await post(`/api/homework/${$("asg").value}/check`, form(), $("check"));
   if (!d.ok) { $("out").innerHTML = `<div class="res bad">${esc(d.error)}</div>`; return; }
-  $("out").innerHTML = `<div class="res"><b>שימוש במונחי הקורס: ${d.coverage}%</b> (${d.used} מתוך ${d.key_terms})<br>
-    ${d.missing.length ? "מונחים מהקורס שלא הופיעו: " + esc(d.missing.join(", ")) + "<br>" : ""}
-    ${d.outside.length ? "מונחים באנגלית שלא מופיעים בחומר הקורס: " + esc(d.outside.join(", ")) : "כל המונחים באנגלית מופיעים בחומר הקורס."}
-    <details><summary>הטקסט שנקרא מהקובץ</summary><pre style="white-space:pre-wrap">${esc(d.text)}</pre></details>
-    <p class="muted">זה רמז בלבד ולא ציון. הבדיקה לא נשמרת ולא נשלחת למרצה.</p></div>`;
+  $("out").innerHTML = `<div class="res"><b>Course terms used: ${d.coverage}%</b> (${d.used} of ${d.key_terms})<br>
+    ${d.missing.length ? "Course terms that did not appear: " + esc(d.missing.join(", ")) + "<br>" : ""}
+    ${d.outside.length ? "English terms not found in the course material: " + esc(d.outside.join(", ")) : "All English terms appear in the course material."}
+    <details><summary>Text read from the file</summary><pre style="white-space:pre-wrap">${esc(d.text)}</pre></details>
+    <p class="muted">This is only a hint, not a grade. The check is not saved and not sent to the lecturer.</p></div>`;
 };
 $("send").onclick = async () => {
   if (!$("asg").value) return;
   const fd = form(); fd.append("student_id", $("sid").value); fd.append("pin", $("pin").value);
   const d = await post(`/api/homework/${$("asg").value}/submit`, fd, $("send"));
-  $("out").innerHTML = d.ok ? `<div class="res ok">${esc(d.name)}, ההגשה נקלטה${d.replaced ? " (החליפה הגשה קודמת)" : ""}.</div>`
+  $("out").innerHTML = d.ok ? `<div class="res ok">${esc(d.name)}, your submission was received${d.replaced ? " (replaced an earlier submission)" : ""}.</div>`
                             : `<div class="res bad">${esc(d.error)}</div>`;
 };
 init();

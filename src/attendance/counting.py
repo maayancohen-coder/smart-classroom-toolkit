@@ -29,12 +29,12 @@ def _http_error_detail(exc: "urllib.error.HTTPError") -> str:
         message = data.get("error", {}).get("message", "") if isinstance(data, dict) else ""
     except (ValueError, AttributeError):
         message = ""
-    return f"שגיאה {exc.code}" + (f": {message[:160]}" if message else "")
+    return f"Error {exc.code}" + (f": {message[:160]}" if message else "")
 
 
 def _transport_detail(exc: Exception) -> str:
     """Connection / timeout / unreadable-reply failures: say which kind (no secrets in these messages)."""
-    return f"שירות הספירה לא זמין כרגע ({type(exc).__name__}: {str(exc)[:120]})"
+    return f"The counting service is unavailable right now ({type(exc).__name__}: {str(exc)[:120]})"
 
 
 class PeopleCounter(ABC):
@@ -69,14 +69,14 @@ def parse_count_reply(text: str) -> CountResult:
     """Pull the JSON object out of the model's reply, tolerating surrounding text or code fences."""
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
-        raise CountingError("תשובת השירות לא הייתה תקינה")
+        raise CountingError("The service returned an invalid answer")
     try:
         data = json.loads(match.group(0))
         value = int(data["count"])
     except (ValueError, KeyError, TypeError):
-        raise CountingError("תשובת השירות לא הייתה תקינה") from None
+        raise CountingError("The service returned an invalid answer") from None
     if value < 0 or value > 2000:
-        raise CountingError("מספר לא סביר בתשובת השירות")
+        raise CountingError("Unreasonable number in the service answer")
     return CountResult(value, "ai-vision", str(data.get("confidence", "")), str(data.get("notes", ""))[:200])
 
 

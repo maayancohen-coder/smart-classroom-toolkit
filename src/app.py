@@ -136,16 +136,16 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         data = request.get_json(silent=True) or {}
         student = service.roster.get(str(data.get("student_id") or "").strip())
         if student is None:
-            return jsonify(ok=False, error="מספר הסטודנט לא נמצא ברשימה"), 400
+            return jsonify(ok=False, error="Student number not found in the roster"), 400
         if config.REQUIRE_PIN:
             pin = str(data.get("pin") or "").strip()
             if not (pin.isdigit() and 4 <= len(pin) <= 6):
-                return jsonify(ok=False, error="יש להזין קוד אישי (PIN) של 4-6 ספרות"), 400
+                return jsonify(ok=False, error="Enter a personal PIN of 4-6 digits"), 400
             verdict = service.pins.check_or_set(student.student_id, pin)
             if verdict == service.pins.LOCKED:
-                return jsonify(ok=False, error="יותר מדי ניסיונות. נסו שוב בעוד כמה דקות"), 429
+                return jsonify(ok=False, error="Too many attempts. Try again in a few minutes"), 429
             if verdict == service.pins.WRONG:
-                return jsonify(ok=False, error="הקוד האישי שגוי"), 400
+                return jsonify(ok=False, error="Wrong PIN"), 400
         login.clear()
         login["student_id"] = student.student_id
         login.permanent = True
@@ -156,7 +156,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         data = request.get_json(silent=True) or {}
         lecturer = catalog.lecturer(str(data.get("lecturer_id") or ""))
         if lecturer is None or not hmac.compare_digest(str(data.get("key") or "").strip(), config.LECTURER_KEY):
-            return jsonify(ok=False, error="פרטי הכניסה שגויים"), 400
+            return jsonify(ok=False, error="Wrong login details"), 400
         login.clear()
         login["lecturer_id"] = lecturer.lecturer_id
         login.permanent = True
@@ -225,9 +225,9 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         try:
             messages.add(course.course_id, student.student_id, student.name, str(data.get("text") or ""))
         except TooFast:
-            return jsonify(ok=False, error="אפשר לשלוח הודעה אחת כל כמה שניות"), 429
+            return jsonify(ok=False, error="You can send one message every few seconds"), 429
         except ValueError:
-            return jsonify(ok=False, error="ההודעה ריקה או שהתיבה מלאה"), 400
+            return jsonify(ok=False, error="The message is empty or the inbox is full"), 400
         return jsonify(ok=True)
 
     @app.get("/live/<session_id>")
@@ -245,14 +245,14 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         session = get_session_or_404(session_id)
         course = catalog.get(session.course_id) if session.course_id else catalog.by_name(session.course)
         if session.closed or course is None or not course.has_student(student.student_id):
-            return jsonify(ok=False, error="השיעור לא פעיל"), 400
+            return jsonify(ok=False, error="The lecture is not active"), 400
         data = request.get_json(silent=True) or {}
         try:
             notes.add(session_id, student.student_id, student.name, str(data.get("text") or ""), bool(data.get("anonymous")))
         except TooFast:
-            return jsonify(ok=False, error="אפשר לשלוח הערה אחת כל כמה שניות"), 429
+            return jsonify(ok=False, error="You can send one note every few seconds"), 429
         except ValueError:
-            return jsonify(ok=False, error="ההערה ריקה או שהתיבה מלאה"), 400
+            return jsonify(ok=False, error="The note is empty or the board is full"), 400
         return jsonify(ok=True)
 
     @app.get("/api/session/<session_id>/my-notes")
@@ -287,7 +287,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         get_session_or_404(session_id)
         after = request.args.get("after", type=int) or 0
-        return jsonify([{"id": n.note_id, "name": n.name or "אנונימי", "text": n.text, "at": n.at}
+        return jsonify([{"id": n.note_id, "name": n.name or "Anonymous", "text": n.text, "at": n.at}
                         for n in notes.list(session_id, after)])
 
     @app.get("/api/session/<session_id>/summary")
@@ -429,16 +429,16 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             if photo is not None:
                 image = photo.read(config.MAX_PHOTO_BYTES + 1)
                 if not image or len(image) > config.MAX_PHOTO_BYTES:
-                    return jsonify(ok=False, error="התמונה ריקה או גדולה מדי"), 400
+                    return jsonify(ok=False, error="The photo is empty or too large"), 400
                 mime = photo.mimetype if photo.mimetype in ("image/jpeg", "image/png", "image/webp") else "image/jpeg"
                 service.count_photo(session, image, mime)
             else:
                 try:
                     value = int(request.form.get("count", (request.get_json(silent=True) or {}).get("count")))
                 except (TypeError, ValueError):
-                    return jsonify(ok=False, error="יש להעלות תמונה או להזין מספר"), 400
+                    return jsonify(ok=False, error="Upload a photo or enter a number"), 400
                 if not 0 <= value <= 2000:
-                    return jsonify(ok=False, error="מספר לא סביר"), 400
+                    return jsonify(ok=False, error="Unreasonable number"), 400
                 service.record_head_count(session, CountResult(value, "manual"))
         except CountingError as exc:
             app.logger.warning("people counting failed: %s", exc)
@@ -487,10 +487,10 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         session = get_session_or_404(session_id)
         upload = request.files.get("slides")
         if upload is None:
-            return jsonify(ok=False, error="לא נבחר קובץ"), 400
+            return jsonify(ok=False, error="No file chosen"), 400
         data = upload.read(MAX_SLIDES_BYTES + 1)
         if not data or len(data) > MAX_SLIDES_BYTES:
-            return jsonify(ok=False, error="הקובץ ריק או גדול מדי (עד 15MB)"), 400
+            return jsonify(ok=False, error="The file is empty or too large (up to 15MB)"), 400
         try:
             text = extract_text(upload.filename or "", data)
         except SlidesError as exc:
@@ -566,7 +566,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return (request.form.get(field + "_text") or "").strip(), ""
         data = upload.read(MAX_SLIDES_BYTES + 1)
         if not data or len(data) > MAX_SLIDES_BYTES:
-            raise ValueError("הקובץ ריק או גדול מדי (עד 15MB)")
+            raise ValueError("The file is empty or too large (up to 15MB)")
         name = upload.filename.lower()
         image_mime = next((m for ext, m in IMAGE_TYPES.items() if name.endswith(ext)), None)
         text = ""
@@ -581,14 +581,14 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
             return text, upload.filename
         transcriber = app.extensions["transcriber"]
         if transcriber is None:
-            raise ValueError("הקובץ סרוק או בכתב יד ואין בו טקסט. כדי לקרוא אותו צריך להגדיר מפתח "
-                             "GEMINI_API_KEY או ANTHROPIC_API_KEY בשרת. אפשר גם להדביק את הטקסט ידנית.")
+            raise ValueError("The file is a scan or handwriting with no text layer. To read it, a "
+                             "GEMINI_API_KEY or ANTHROPIC_API_KEY must be set on the server. You can also paste the text by hand.")
         try:
             text = transcriber.transcribe(data, image_mime or "application/pdf")
         except HandwritingError as exc:
             raise ValueError(str(exc)) from exc
         if not text:
-            raise ValueError("לא הצלחתי לקרוא טקסט מהקובץ")
+            raise ValueError("Could not read any text from the file")
         return text, upload.filename
 
     def assignment_or_404(assignment_id: str):
@@ -622,7 +622,7 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         require_lecturer()
         course, title = (request.form.get("course") or "").strip(), (request.form.get("title") or "").strip()
         if not course or not title:
-            return jsonify(ok=False, error="חסר שם קורס או שם מטלה"), 400
+            return jsonify(ok=False, error="Course name or assignment title is missing"), 400
         assignment = homework.create(course, title)
         try:
             save_files(assignment)
@@ -672,9 +672,9 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         except ValueError as exc:
             return jsonify(ok=False, error=str(exc)), 400
         if not text:
-            return jsonify(ok=False, error="לא התקבל טקסט"), 400
+            return jsonify(ok=False, error="No text received"), 400
         if not assignment.materials_text:
-            return jsonify(ok=False, error="המרצה עוד לא העלה חומר קורס לבדיקה"), 400
+            return jsonify(ok=False, error="The lecturer has not uploaded course material to check against yet"), 400
         check = content_check(text, assignment.materials_text, assignment.assignment_text)
         return jsonify(ok=True, text=text, coverage=check["coverage"], missing=check["missing"],
                        outside=check["outside"], key_terms=check["key_terms"], used=check["used"])
@@ -684,22 +684,22 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         assignment = assignment_or_404(assignment_id)
         student = service.roster.get((request.form.get("student_id") or "").strip())
         if student is None:
-            return jsonify(ok=False, error="מספר הסטודנט לא נמצא ברשימת הקורס"), 400
+            return jsonify(ok=False, error="Student number not found in the course roster"), 400
         if config.REQUIRE_PIN:
             pin = (request.form.get("pin") or "").strip()
             if not (pin.isdigit() and 4 <= len(pin) <= 6):
-                return jsonify(ok=False, error="יש להזין קוד אישי (PIN) של 4-6 ספרות"), 400
+                return jsonify(ok=False, error="Enter a personal PIN of 4-6 digits"), 400
             verdict = service.pins.check_or_set(student.student_id, pin)
             if verdict == service.pins.LOCKED:
-                return jsonify(ok=False, error="יותר מדי ניסיונות. נסו שוב בעוד כמה דקות"), 429
+                return jsonify(ok=False, error="Too many attempts. Try again in a few minutes"), 429
             if verdict == service.pins.WRONG:
-                return jsonify(ok=False, error="הקוד האישי שגוי"), 400
+                return jsonify(ok=False, error="Wrong PIN"), 400
         try:
             text, filename = read_upload("file")
         except ValueError as exc:
             return jsonify(ok=False, error=str(exc)), 400
         if len(text) < 5:
-            return jsonify(ok=False, error="לא התקבל טקסט. צרפו קובץ או הדביקו את הפתרון"), 400
+            return jsonify(ok=False, error="No text received. Attach a file or paste the solution"), 400
         replaced = homework.submit(assignment, student.student_id, student.name, filename or "text", text)
         return jsonify(ok=True, replaced=replaced, name=student.name, chars=len(text))
 

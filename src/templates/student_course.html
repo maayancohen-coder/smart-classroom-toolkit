@@ -7,19 +7,19 @@
 </style>{% endblock %}
 {% block body %}
 <div class="wrap"><div class="card">
-  <p><a href="/my">← הקורסים שלי</a></p>
+  <p><a href="/my">← My courses</a></p>
   <h1>{{ course.name }}</h1>
   {% if live %}
-  <div class="sec"><h3>יש שיעור פעיל עכשיו</h3>
-    <a class="btn full" href="/live/{{ live.session_id }}">כניסה לשיעור והערות בזמן אמת</a></div>
+  <div class="sec"><h3>There is an active lecture now</h3>
+    <a class="btn full" href="/live/{{ live.session_id }}">Join the lecture and send live notes</a></div>
   {% endif %}
-  <div class="sec"><h3>כתיבה למרצה</h3>
-    <textarea id="msg" maxlength="500" placeholder="שאלה, בקשה או הערה למרצה"></textarea>
-    <button class="full" id="send">שליחה</button><div id="msgOut"></div></div>
-  <div class="sec"><h3>שיעורי בית</h3>
+  <div class="sec"><h3>Write to the lecturer</h3>
+    <textarea id="msg" maxlength="500" placeholder="A question, request or comment for the lecturer"></textarea>
+    <button class="full" id="send">Send</button><div id="msgOut"></div></div>
+  <div class="sec"><h3>Homework</h3>
     {% for a in assignments %}<p><a href="/homework?assignment={{ a.id }}">{{ a.title }}</a></p>
-    {% else %}<p class="muted">אין מטלות פתוחות.</p>{% endfor %}</div>
-  <div class="sec"><h3>סיכומי שיעורים</h3><div id="sums" class="muted">טוען…</div></div>
+    {% else %}<p class="muted">No open assignments.</p>{% endfor %}</div>
+  <div class="sec"><h3>Lecture summaries</h3><div id="sums" class="muted">Loading…</div></div>
 </div></div>
 <script>
 const $ = id => document.getElementById(id);
@@ -27,14 +27,14 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 $("send").onclick = async () => {
   const res = await fetch("/api/course/{{ course.course_id }}/message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text: $("msg").value }) });
   const d = await res.json().catch(() => ({}));
-  $("msgOut").textContent = d.ok ? "ההודעה נשלחה למרצה" : (d.error || "שגיאה"); if (d.ok) $("msg").value = "";
+  $("msgOut").textContent = d.ok ? "Message sent to the lecturer" : (d.error || "Error"); if (d.ok) $("msg").value = "";
 };
 (async () => {
   const items = await (await fetch("/api/course/{{ course.course_id }}/summaries")).json();
-  $("sums").innerHTML = items.length ? items.map(s => `<div class="sum"><b>${new Date(s.started_at * 1000).toLocaleDateString("he-IL")}</b>
-    ${s.terms.length ? `<p class="muted">מושגים: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")
-    + '<p class="muted" style="font-size:.85rem">סיכום אוטומטי שנבחר מתוך התמלול, ולא תחליף להקשבה לשיעור.</p>'
-    : "המרצה עוד לא פרסם סיכומים.";
+  $("sums").innerHTML = items.length ? items.map(s => `<div class="sum"><b>${new Date(s.started_at * 1000).toLocaleDateString("en-GB")}</b>
+    ${s.terms.length ? `<p class="muted">Key terms: ${esc(s.terms.join(", "))}</p>` : ""}<ul>${s.sentences.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")
+    + '<p class="muted" style="font-size:.85rem">Automatic summary picked from the transcript. Not a substitute for attending the lecture.</p>'
+    : "The lecturer has not published any summaries yet.";
 })();
 </script>
 {% endblock %}

@@ -1,45 +1,45 @@
 {% extends "base.html" %}
-{% block title %}פתיחת שיעור{% endblock %}
+{% block title %}Open a lecture{% endblock %}
 {% block body %}
 <div class="wrap"><div class="card">
-  <h1>פתיחת שיעור</h1>
-  <p class="muted">לחיצה אחת, והמערכת עושה את השאר.</p>
+  <h1>Open a lecture</h1>
+  <p class="muted">One click, and the system does the rest.</p>
   <p>{% for c in courses %}<a class="btn secondary" style="margin:0 0 6px 6px" href="/lecturer/course/{{ c.id }}">{{ c.name }}</a>{% endfor %}</p>
 
-  <label for="course">שם הקורס</label>
+  <label for="course">Course</label>
   <select id="course">{% for c in courses %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
-  <p class="muted" style="font-size:.9rem"><a href="/logout">יציאה</a></p>
+  <p class="muted" style="font-size:.9rem"><a href="/logout">Log out</a></p>
 
-  <label>מיקום הכיתה</label>
-  <button class="secondary" id="loc" type="button">📍 השתמש במיקום שלי</button>
-  <p class="muted" id="locInfo" style="font-size:.9rem">לא הוגדר – בדיקת המיקום תיכבה.</p>
+  <label>Classroom location</label>
+  <button class="secondary" id="loc" type="button">📍 Use my location</button>
+  <p class="muted" id="locInfo" style="font-size:.9rem">Not set. The location check will be off.</p>
 
-  <label for="radius">רדיוס (מטרים)</label>
+  <label for="radius">Radius (meters)</label>
   <input id="radius" type="number" min="20" value="{{ default_radius }}">
 
-  <button class="full" id="open">פתח שיעור</button>
+  <button class="full" id="open">Open lecture</button>
   <p id="msg"></p>
 </div></div>
 <script>
 let pos = null;
 const $ = id => document.getElementById(id);
 $("loc").onclick = () => {
-  $("locInfo").textContent = "מאתר…";
+  $("locInfo").textContent = "Locating…";
   navigator.geolocation.getCurrentPosition(
     p => { pos = p.coords; $("locInfo").textContent =
-      `נקלט (דיוק ±${Math.round(p.coords.accuracy)} מ׳)`; },
-    () => { $("locInfo").textContent = "לא התקבל אישור מיקום – בדיקת המיקום תיכבה."; },
+      `Got it (accuracy ±${Math.round(p.coords.accuracy)} m)`; },
+    () => { $("locInfo").textContent = "Location was not allowed. The location check will be off."; },
     { enableHighAccuracy: true, timeout: 10000 });
 };
 $("open").onclick = async () => {
   const course = $("course").value;
-  if (!course) { $("msg").textContent = "אין קורסים משויכים אליך"; return; }
+  if (!course) { $("msg").textContent = "No courses are assigned to you"; return; }
   $("open").disabled = true;
   const res = await fetch("/api/session", { method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ course_id: course, radius: $("radius").value,
                            lat: pos && pos.latitude, lng: pos && pos.longitude }) });
-  if (!res.ok) { $("msg").textContent = "שגיאה"; $("open").disabled = false; return; }
+  if (!res.ok) { $("msg").textContent = "Error"; $("open").disabled = false; return; }
   location.href = (await res.json()).url;
 };
 </script>

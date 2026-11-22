@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}תמלול · {{ session.course }}{% endblock %}
+{% block title %}Transcript · {{ session.course }}{% endblock %}
 {% block head %}
 <style>
   .page { max-width: 860px; margin: 0 auto; padding: 20px 16px; }
@@ -17,54 +17,54 @@
   .meter > i { position: absolute; top: 0; bottom: 0; width: 3px; background: #b42318; }
   #live { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-height: 60px; max-height: 220px; overflow: auto; }
   #live .cls { color: var(--muted); font-style: italic; }
-  #live .cls::before { content: "קול שקט: "; font-size: .8rem; }
+  #live .cls::before { content: "Quiet voice: "; font-size: .8rem; }
   details { margin-top: 12px; }
 </style>
 {% endblock %}
 {% block body %}
 <div class="page"><div class="card">
-  <h1>תמלול הרצאה · {{ session.course }}</h1>
-  <p class="muted">מקליטים עם המיקרופון של הדפדפן. המערכת שומרת רק את קול המרצה (הקול החזק במיקרופון), ושאלות רלוונטיות מהכיתה שהמרצה ענה עליהן. מונחים באנגלית מתוקנים לפי רשימה.</p>
-  <div class="note">ההכתבה פועלת ב-Chrome. הקול מעובד בשירות זיהוי הדיבור של הדפדפן (ב-Chrome: Google), והמערכת עצמה לא שומרת אודיו, רק טקסט. יש להודיע לכיתה לפני שמקליטים. ההפרדה בין המרצה לכיתה מבוססת על עוצמת הקול במיקרופון, לא על זיהוי דובר, ולכן המרצה צריך להיות הקרוב ביותר למיקרופון.</div>
+  <h1>Lecture transcript · {{ session.course }}</h1>
+  <p class="muted">Record with the browser's microphone. The system keeps only the lecturer's voice (the loudest voice on the microphone) and relevant student questions the lecturer answered. English terms are corrected using a list.</p>
+  <div class="note">Dictation works in Chrome. The audio is processed by the browser's speech recognition service (in Chrome: Google); the system itself stores no audio, only text. Tell the class before recording. Separating the lecturer from the class is based on microphone loudness, not on speaker recognition, so the lecturer should be the closest to the microphone.</div>
 
   <div class="row">
-    <select id="lang"><option value="he-IL">עברית</option><option value="en-US">English</option></select>
-    <button id="rec" type="button">התחל הקלטה</button>
-    <button id="cal" type="button" class="secondary">כיול קול המרצה (5 שניות)</button>
+    <select id="lang"><option value="he-IL">Hebrew</option><option value="en-US">English</option></select>
+    <button id="rec" type="button">Start recording</button>
+    <button id="cal" type="button" class="secondary">Calibrate lecturer's voice (5 seconds)</button>
     <span class="muted" id="state"></span>
   </div>
-  <label for="thr" style="margin-bottom:0">סף עוצמה: מה שמתחת לקו האדום נחשב לכיתה</label>
+  <label for="thr" style="margin-bottom:0">Loudness threshold: anything below the red line counts as the class</label>
   <input id="thr" type="range" min="0.005" max="0.3" step="0.005" value="0.05" style="padding:0">
   <div class="meter"><div id="lvl"></div><i id="mark"></i></div>
 
-  <label>מה שנשמע עכשיו</label>
+  <label>Heard now</label>
   <div id="live"></div>
 
   <details>
-    <summary>או הדביקו טקסט ידנית (במקום הקלטה)</summary>
-    <textarea id="raw" placeholder="טקסט להדבקה"></textarea>
+    <summary>Or paste text by hand (instead of recording)</summary>
+    <textarea id="raw" placeholder="Text to paste"></textarea>
   </details>
 
-  <label for="slides">מצגת השיעור (PowerPoint, PDF או טקסט)</label>
+  <label for="slides">Lecture slides (PowerPoint, PDF or text)</label>
   <div class="row">
     <input type="file" id="slides" accept=".pptx,.pdf,.txt,.md" style="width:auto">
-    <button id="upSlides" type="button" class="secondary">קרא מונחים מהמצגת</button>
+    <button id="upSlides" type="button" class="secondary">Read terms from the slides</button>
     <span class="muted" id="slidesState"></span>
   </div>
 
-  <label for="glossary">מונחים מהשקופיות (אחד בשורה, או מופרדים בפסיק)</label>
+  <label for="glossary">Terms from the slides (one per line, or comma-separated)</label>
   <textarea id="glossary" class="small" placeholder="Strategy, Adapter, Interface, Unit Test"></textarea>
-  <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="defaults" checked style="width:auto"> כלול גם מונחים נפוצים בהנדסת תוכנה</label>
-  <div class="row"><button id="fix" type="button">הפק תמלול</button></div>
+  <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="defaults" checked style="width:auto"> Also include common software engineering terms</label>
+  <div class="row"><button id="fix" type="button">Produce transcript</button></div>
 
   <div id="result" hidden>
-    <label>התמלול</label>
+    <label>Transcript</label>
     <textarea id="corrected" readonly></textarea>
     <p id="fixes"></p>
     <p id="dropped"></p>
     <div class="row">
-      <a class="btn secondary" id="dl" href="/api/session/{{ session.session_id }}/transcript.txt">הורדה כקובץ</a>
-      <a class="btn secondary" href="/lecturer/{{ session.session_id }}">חזרה לשיעור</a>
+      <a class="btn secondary" id="dl" href="/api/session/{{ session.session_id }}/transcript.txt">Download as a file</a>
+      <a class="btn secondary" href="/lecturer/{{ session.session_id }}">Back to the lecture</a>
     </div>
   </div>
 </div></div>
@@ -80,7 +80,7 @@ let segments = [];            // {text, level, t0, t1}
 let samples = [];             // microphone level over time: {t, v}
 let audioCtx = null, analyser = null, buf = null, meterTimer = null, calibrating = null;
 
-if (!SR) { $("rec").disabled = true; $("state").textContent = "הדפדפן לא תומך בהכתבה. אפשר להדביק טקסט ידנית."; }
+if (!SR) { $("rec").disabled = true; $("state").textContent = "This browser does not support dictation. You can paste text by hand."; }
 
 const threshold = () => parseFloat($("thr").value);
 function updateMark() { $("mark").style.right = Math.min(100, threshold() / 0.3 * 100) + "%"; }
@@ -124,7 +124,7 @@ async function ensureMic() {
     }, 100);
     return true;
   } catch (e) {
-    $("state").textContent = "אין גישה למיקרופון: " + (e.name || e);
+    $("state").textContent = "No microphone access: " + (e.name || e);
     return false;
   }
 }
@@ -142,7 +142,7 @@ function startRecognition() {
     }
     renderLive();
   };
-  rec.onerror = e => { $("state").textContent = e.error === "not-allowed" ? "אין הרשאה למיקרופון" : "שגיאת הכתבה: " + e.error; };
+  rec.onerror = e => { $("state").textContent = e.error === "not-allowed" ? "Microphone not allowed" : "Dictation error: " + e.error; };
   rec.onend = () => { if (recording) { try { rec.start(); } catch (_) {} } };   // Chrome stops after silence
   lastFinal = now();
   rec.start();
@@ -154,36 +154,36 @@ $("rec").addEventListener("click", async () => {
   } else {
     recording = false; try { rec.stop(); } catch (_) {}
   }
-  $("rec").textContent = recording ? "עצור הקלטה" : "התחל הקלטה";
+  $("rec").textContent = recording ? "Stop recording" : "Start recording";
   $("rec").classList.toggle("rec", recording);
-  $("state").textContent = recording ? "מקליט…" : "";
+  $("state").textContent = recording ? "Recording…" : "";
 });
 $("cal").addEventListener("click", async () => {
   if (!(await ensureMic())) return;
-  $("state").textContent = "המרצה מדבר עכשיו כרגיל…";
+  $("state").textContent = "Lecturer: speak normally now…";
   calibrating = [];
   await new Promise(r => setTimeout(r, 5000));
   const got = calibrating; calibrating = null;
   const floor = percentile(got, 0.2);
   const voiced = got.filter(v => v > Math.max(0.004, floor * 2));
-  if (voiced.length < 10) { $("state").textContent = "לא נשמע דיבור. נסו שוב קרוב יותר למיקרופון."; return; }
+  if (voiced.length < 10) { $("state").textContent = "No speech heard. Try again closer to the microphone."; return; }
   const level = percentile(voiced, 0.5);
   $("thr").value = Math.min(0.3, Math.max(0.005, level * 0.5)).toFixed(3);
   updateMark(); renderLive();
-  $("state").textContent = "הסף עודכן לפי קול המרצה";
+  $("state").textContent = "Threshold set from the lecturer's voice";
 });
 $("upSlides").addEventListener("click", async () => {
   const file = $("slides").files[0];
-  if (!file) { $("slidesState").textContent = "בחרו קובץ"; return; }
+  if (!file) { $("slidesState").textContent = "Choose a file"; return; }
   const form = new FormData(); form.append("slides", file);
-  $("slidesState").textContent = "קורא…";
+  $("slidesState").textContent = "Reading…";
   const res = await fetch(`/api/session/${SID}/slides`, { method: "POST", body: form });
-  const d = await res.json().catch(() => ({ ok: false, error: "שגיאה" }));
+  const d = await res.json().catch(() => ({ ok: false, error: "Error" }));
   if (!d.ok) { $("slidesState").textContent = d.error; return; }
   const have = new Set($("glossary").value.split(/[\n,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean));
   const extra = d.terms.filter(t => !have.has(t.toLowerCase()));
   $("glossary").value = [$("glossary").value.trim(), ...extra].filter(Boolean).join(", ");
-  $("slidesState").textContent = `נקראו ${d.terms.length} מונחים מ-${d.name}. אפשר לערוך את הרשימה.`;
+  $("slidesState").textContent = `Read ${d.terms.length} terms from ${d.name}. You can edit the list.`;
 });
 $("thr").addEventListener("input", () => { updateMark(); renderLive(); });
 updateMark();
@@ -192,16 +192,16 @@ $("fix").addEventListener("click", async () => {
   const res = await fetch(`/api/session/${SID}/transcript`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ raw: $("raw").value, segments, threshold: threshold(),
                            glossary: $("glossary").value, defaults: $("defaults").checked }) });
-  if (!res.ok) { $("state").textContent = "שגיאה בהפקת התמלול"; return; }
+  if (!res.ok) { $("state").textContent = "Error producing the transcript"; return; }
   const d = await res.json();
   $("result").hidden = false;
   $("corrected").value = d.corrected;
-  $("fixes").innerHTML = (d.fixes.length ? "מונחים באנגלית שתוקנו: " + d.fixes.length + " " : "לא נמצאו מונחים לתקן. ")
+  $("fixes").innerHTML = (d.fixes.length ? "English terms corrected: " + d.fixes.length + " " : "No terms needed correcting. ")
     + d.fixes.map(f => `<span class="fix">${esc(f.heard)} ← ${esc(f.term)}</span>`).join("")
-    + (d.questions ? `<br>שאלות מהכיתה שנכללו: ${d.questions}` : "")
-    + (d.missing.length ? "<br>מונחים מהרשימה שלא הופיעו: " + d.missing.map(m => `<span class="fix miss">${esc(m)}</span>`).join("") : "");
+    + (d.questions ? `<br>Student questions included: ${d.questions}` : "")
+    + (d.missing.length ? "<br>Listed terms that did not appear: " + d.missing.map(m => `<span class="fix miss">${esc(m)}</span>`).join("") : "");
   $("dropped").innerHTML = d.dropped.length
-    ? "הוסרו (לא קול המרצה): " + d.dropped.map(x => `<span class="fix drop" title="${esc(x.reason)}">${esc(x.text)}</span>`).join("")
+    ? "Removed (not the lecturer's voice): " + d.dropped.map(x => `<span class="fix drop" title="${esc(x.reason)}">${esc(x.text)}</span>`).join("")
     : "";
 });
 </script>

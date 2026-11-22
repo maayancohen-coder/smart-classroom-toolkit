@@ -98,7 +98,7 @@ def test_related_student_question_with_an_answer_is_kept():
          seg("מה ההבדל בין Strategy לבין Adapter", QUIET, 4, 8),
          seg("ההבדל הוא שהאדפטר מתאים ממשק", LOUD, 8, 12)],
         LIMIT, GLOSSARY)
-    assert "[שאלה מהכיתה] מה ההבדל בין Strategy לבין Adapter" in result.text and result.questions == 1
+    assert "[Student question] מה ההבדל בין Strategy לבין Adapter" in result.text and result.questions == 1
 
 
 def test_question_without_an_answer_is_dropped():

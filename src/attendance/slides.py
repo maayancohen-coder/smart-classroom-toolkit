@@ -32,17 +32,17 @@ def extract_text(filename: str, data: bytes) -> str:
         return _pdf_text(data)
     if name.endswith((".txt", ".md")):
         return data.decode("utf-8", errors="replace")
-    raise SlidesError("סוגי קבצים נתמכים: PowerPoint (pptx), PDF או טקסט")
+    raise SlidesError("Supported files: PowerPoint (pptx), PDF or text")
 
 
 def _pptx_text(data: bytes) -> str:
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
-        raise SlidesError("הקובץ אינו קובץ PowerPoint תקין (pptx)") from exc
+        raise SlidesError("The file is not a valid PowerPoint (pptx) file") from exc
     slides = [i for i in archive.infolist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", i.filename)]
     if sum(i.file_size for i in slides) > MAX_UNZIPPED:
-        raise SlidesError("הקובץ גדול מדי")
+        raise SlidesError("The file is too large")
     slides.sort(key=lambda i: int(re.search(r"(\d+)\.xml", i.filename).group(1)))
     lines = []
     for info in slides:
@@ -59,12 +59,12 @@ def _pdf_text(data: bytes) -> str:
     try:
         from pypdf import PdfReader
     except ImportError as exc:
-        raise SlidesError("קריאת PDF דורשת את החבילה pypdf. אפשר להעלות PowerPoint (pptx).") from exc
+        raise SlidesError("Reading PDF needs the pypdf package. You can upload PowerPoint (pptx) instead.") from exc
     try:
         reader = PdfReader(io.BytesIO(data))
         return "\n".join((page.extract_text() or "") for page in reader.pages[:300])
     except Exception as exc:  # a damaged or protected file
-        raise SlidesError("לא הצלחתי לקרוא את ה-PDF") from exc
+        raise SlidesError("Could not read the PDF") from exc
 
 
 def extract_terms(text: str, limit: int = 150) -> list[str]:

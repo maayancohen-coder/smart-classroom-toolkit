@@ -325,7 +325,7 @@ def test_no_location_permission_means_no_attendance(strict):
     app, _, lecturer, sid = strict
     phone = app.test_client()
     res = submit(phone, open_checkin(phone, qr_path(lecturer, sid)), "100000001", samples=[], denied=True, pin="1234")
-    assert res.status_code == 400 and "מיקום" in res.get_json()["error"]
+    assert res.status_code == 400 and "location" in res.get_json()["error"].lower()
     assert status_of(lecturer, sid, "100000001")["status"] == "absent"
 
 
@@ -348,7 +348,7 @@ def test_private_window_with_friends_id_but_no_pin_is_blocked(strict):
     submit(friend, open_checkin(friend, qr_path(lecturer, sid)), "100000003", pin="5555")  # friend registers own PIN
     cheat = app.test_client()
     res = submit(cheat, open_checkin(cheat, qr_path(lecturer, sid)), "100000003", pin="0000")
-    assert res.status_code == 400 and "שגוי" in res.get_json()["error"]
+    assert res.status_code == 400 and "wrong" in res.get_json()["error"].lower()
 
 
 def test_legit_student_on_new_phone_with_correct_pin_is_present(strict):
@@ -375,7 +375,7 @@ def test_pin_locks_after_repeated_wrong_guesses(strict):
     for guess in ("0001", "0002", "0003", "0004", "0005", "4321"):  # the right PIN is rejected once locked
         attacker = app.test_client()
         last = submit(attacker, open_checkin(attacker, qr_path(lecturer, sid2)), "100000001", pin=guess)
-    assert last.status_code == 400 and "ניסיונות" in last.get_json()["error"]
+    assert last.status_code == 400 and "attempts" in last.get_json()["error"].lower()
 
 
 def test_lecturer_reset_clears_pin(strict):

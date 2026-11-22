@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}סימון נוכחות{% endblock %}
-{% block who %}{{ student.name }} · <a href="/logout">יציאה</a>{% endblock %}
+{% block title %}Mark attendance{% endblock %}
+{% block who %}{{ student.name }} · <a href="/logout">Log out</a>{% endblock %}
 {% block body %}
-<div class="back"><a href="/my">← חזרה</a></div>
-<section class="hero"><h1>סימון נוכחות</h1><p>בחרו קורס עם שיעור פעיל וסרקו את ה-QR שמוצג על מסך המרצה. יש לאשר גישה למצלמה ולמיקום.</p></section>
+<div class="back"><a href="/my">← Back</a></div>
+<section class="hero"><h1>Mark attendance</h1><p>Pick a course with an active lecture and scan the QR code on the lecturer's screen. Allow camera and location access.</p></section>
 <div class="section"><div class="list">
   {% for c in courses %}
   <div class="row"><b>{{ c.name }}</b>
-    {% if c.live %}<a class="btn" href="/scan?course={{ c.id }}">סריקת QR</a>
-    {% else %}<span class="pill idle">אין שיעור פעיל</span>{% endif %}</div>
-  {% else %}<div class="row">אין לך קורסים רשומים.</div>{% endfor %}
+    {% if c.live %}<a class="btn" href="/scan?course={{ c.id }}">Scan QR</a>
+    {% else %}<span class="pill idle">No active lecture</span>{% endif %}</div>
+  {% else %}<div class="row">You have no courses.</div>{% endfor %}
 </div>
-<p class="muted" style="font-size:.9rem">אפשר גם לסרוק את הקוד באפליקציית המצלמה הרגילה של הטלפון.</p></div>
+<p class="muted" style="font-size:.9rem">You can also scan the code with your phone's regular camera app.</p></div>
 {% endblock %}

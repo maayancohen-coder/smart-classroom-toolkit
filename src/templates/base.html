@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}נוכחות{% endblock %}</title>
+<title>{% block title %}Attendance{% endblock %}</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6ec;
@@ -33,6 +33,7 @@
   button.full { width: 100%; margin-top: 18px; }
   button:disabled { opacity: .55; cursor: default; }
   a { color: var(--accent); }
+  textarea, pre, .plain { unicode-bidi: plaintext; }   /* Hebrew text stays right-to-left inside an English page */
   select { width: 100%; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); }
 
@@ -75,7 +76,7 @@
 </head>
 <body>
 {% block topbar %}<header class="topbar"><div class="in">
-  <a class="brand" href="/"><i></i> מערכת הקורסים</a>
+  <a class="brand" href="/"><i></i> Course Hub</a>
   <div class="who">{% block who %}{% endblock %}</div>
 </div></header>{% endblock %}
 {% block body %}{% endblock %}</body>
