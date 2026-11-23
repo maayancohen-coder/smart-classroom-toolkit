@@ -144,7 +144,7 @@ def test_past_lecture_can_get_a_transcript_and_students_see_it_when_published():
     assert lecturer.post("/api/course/i2se/past-lecture", json={"date": "2999-01-01"}).status_code == 400
     sid = lecturer.post("/api/course/i2se/past-lecture", json={"date": "2026-11-10"}).get_json()["session_id"]
     assert lecturer.get(f"/lecturer/{sid}/transcript").status_code == 200
-    lecturer.post(f"/api/session/{sid}/transcript", json={"raw": TRANSCRIPT, "glossary": "Strategy", "defaults": False})
+    lecturer.post(f"/api/session/{sid}/transcript", json={"raw": TRANSCRIPT, "glossary": "Strategy"})
     lec = lecturer.get("/api/course/i2se/lectures").get_json()
     assert lec[0]["id"] == sid and lec[0]["closed"] and lec[0]["has_transcript"]
     student = student_client(app)
@@ -158,7 +158,7 @@ def test_recording_is_played_by_students_only_after_publishing():
     import io as _io
     app, lecturer = setup()
     sid = lecturer.post("/api/course/i2se/past-lecture", json={"date": "2026-11-10"}).get_json()["session_id"]
-    lecturer.post(f"/api/session/{sid}/transcript", json={"raw": TRANSCRIPT, "glossary": "", "defaults": False})
+    lecturer.post(f"/api/session/{sid}/transcript", json={"raw": TRANSCRIPT, "glossary": ""})
     bad = lecturer.post(f"/api/session/{sid}/recording-file", data={"file": (_io.BytesIO(b"x"), "a.txt", "text/plain")})
     assert bad.status_code == 400
     ok = lecturer.post(f"/api/session/{sid}/recording-file", data={"file": (_io.BytesIO(b"0123456789"), "a.m4a", "audio/mp4")})

@@ -337,7 +337,7 @@ $("fixes").addEventListener("click", e => {
 $("fix").addEventListener("click", async () => {
   const res = await fetch(`/api/session/${SID}/transcript`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ raw: $("raw").value, segments, threshold: threshold(),
-                           glossary: $("glossary").value, defaults: false, exclude: [...excluded] }) });
+                           glossary: $("glossary").value, exclude: [...excluded] }) });
   if (!res.ok) { $("state").textContent = "Error producing the transcript"; return; }
   const d = await res.json();
   $("result").hidden = false;

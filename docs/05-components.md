@@ -72,7 +72,7 @@ flowchart LR
 
 | Component | Responsibility | Requirements |
 |---|---|---|
-| **API layer** | Routes requests, checks that lecturer functions are called only by an authenticated lecturer, limits request rate, returns JSON and pages | NFR-3, NFR-6 |
+| **API layer** | Routes requests, checks that lecturer functions are called only by an authenticated lecturer, returns JSON and pages | NFR-3 |
 | **Session service** | Creates and closes sessions; holds the session secret, classroom location, radius and trusted network; loads the class roster | FR-1 to FR-4 |
 | **Attendance service** | Generates and verifies rotating tokens; creates check-in tickets; runs the attendance checks and the evaluator; keeps the device binding; computes the head-count gap | FR-5 to FR-24 |
 | **Report exporter** | Builds the attendance sheet and exports it to Excel and CSV | FR-25 to FR-28 |
