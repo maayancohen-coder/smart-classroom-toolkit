@@ -167,7 +167,7 @@ All external services are replaced by fakes in these tests, so they check our co
 
 - A request to any lecturer route without authentication is refused (NFR-3).
 - A forged, modified or replayed token or ticket is refused (NFR-1, NFR-2).
-- Repeated wrong PINs from one client are locked out (FR-9b). General rate limiting (NFR-6) is future work.
+- Many check-in attempts from one client are limited (NFR-6).
 - The device cookie is not readable by page scripts (NFR-5).
 
 ### 7.2 Privacy

@@ -119,14 +119,14 @@ def test_spoken_letters_can_be_a_or_i():
     assert fix("חשוב להכיר איי פי איי", GLOSSARY + ["API"]) == "חשוב להכיר API"
 
 
-def test_route_uses_segments_threshold_and_the_lecturers_glossary(env):
+def test_route_uses_segments_threshold_and_default_terms(env):
     _, _, lecturer, sid = env
-    body = {"threshold": LIMIT, "glossary": "Strategy", "segments": [
+    body = {"threshold": LIMIT, "glossary": "", "segments": [
         {"text": "תבנית סטרטגי", "level": LOUD, "t0": 0, "t1": 3},
         {"text": "שיחה בצד", "level": QUIET, "t0": 3, "t1": 5}]}
     data = lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()
     assert data["corrected"] == "תבנית Strategy" and len(data["dropped"]) == 1
-    body["glossary"] = ""
+    body["defaults"] = False
     assert lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()["corrected"] == "תבנית סטרטגי"
 
 
@@ -156,7 +156,7 @@ def test_the_lecturer_can_reject_a_term_and_it_is_no_longer_used():
     lecturer = app.test_client()
     lecturer.get("/lecturer?key=test-key")
     sid = lecturer.post("/api/session", json={"course": "T"}).get_json()["session_id"]
-    body = {"raw": "היום נדבר על סטרטגי", "glossary": "Strategy"}
+    body = {"raw": "היום נדבר על סטרטגי", "glossary": "Strategy", "defaults": False}
     assert lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()["fixes"]
     body["exclude"] = ["strategy"]
     assert lecturer.post(f"/api/session/{sid}/transcript", json=body).get_json()["fixes"] == []

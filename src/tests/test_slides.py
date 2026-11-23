@@ -91,7 +91,7 @@ def test_route_refuses_bad_files_and_non_lecturers(env):
 def test_slide_words_make_a_student_question_relevant(env):
     _, _, lecturer, sid = env
     lecturer.post(f"/api/session/{sid}/slides", data={"slides": (io.BytesIO(make_pptx(["הממשק מגדיר התנהגות"])), "l.pptx")})
-    body = {"threshold": 0.1, "glossary": "", "segments": [
+    body = {"threshold": 0.1, "glossary": "", "defaults": False, "segments": [
         {"text": "נמשיך הלאה", "level": 0.2, "t0": 0, "t1": 2},
         {"text": "מה זה הממשק", "level": 0.03, "t0": 2, "t1": 5},
         {"text": "זה חוזה בין מחלקות", "level": 0.2, "t0": 5, "t1": 8}]}

@@ -1,6 +1,6 @@
 # Summary
 
-Status: v2 (updated for what was built)
+Status: v2 (updated for what was built; the open items are in section 5)
 
 ## 1. What we built
 
@@ -51,8 +51,10 @@ Polls and comments are covered by design documents only.
 
 ## 5. Still to complete
 
+- Designs for polls and comments are written; they are not built.
 - A full rehearsal of the 10-minute demo on the university network, including the AI test button and a short recording.
-- Polls and comments have designs only; they are not built.
+- Check the README and the class and sequence diagrams (document 06), which still show the earlier design.
+- This section is to be removed when the items above are done.
 
 ## 6. What we learned
 

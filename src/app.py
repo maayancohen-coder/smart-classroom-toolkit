@@ -19,6 +19,7 @@ from attendance.repository import DeviceRegistry, Roster, SessionStore
 from attendance.service import AttendanceService, CheckInError
 from attendance.tokens import TokenService
 from attendance.slides import MAX_BYTES as MAX_SLIDES_BYTES, SlidesError, extract_terms, extract_text, hebrew_words
+from attendance.terms import DEFAULT_TERMS
 from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
@@ -511,6 +512,8 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
         data = request.get_json(silent=True) or {}
         glossary_text = str(data.get("glossary") or "")[:5_000]
         terms = parse_glossary(glossary_text)
+        if data.get("defaults", True):
+            terms = terms + [t for t in DEFAULT_TERMS if t.lower() not in {x.lower() for x in terms}]
         excluded = {str(x).lower() for x in (data.get("exclude") or [])[:200]}
         terms = [t for t in terms if t.lower() not in excluded]            # terms the lecturer rejected
         raw = str(data.get("raw") or "")[:200_000]
