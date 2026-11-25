@@ -124,7 +124,7 @@ Requirements are marked **M** (must) or **S** (should). Attendance requirements 
 | FR-38b | If the lecturer chooses to keep the recording (up to 100 MB), the students of the course shall be able to play it, only after the lecture is published. | S | Done |
 | FR-39 | The system shall show the progress of a recording transcription (part N of M) and the reason for a failure. In the demo this is shown on the page while it runs; there is no background job that continues after the page is closed, and a failed part means starting again. | S | Done (progress on the page) |
 
-Not in the demo: a server-side background job and extracting audio on the server (for example with ffmpeg). A kept recording lives in memory, so it is lost when the free server restarts. The transcript of a recording includes every speaker; the lecturer-voice filter exists only in the live transcript.
+Not in the demo: a server-side background job and extracting audio on the server (for example with ffmpeg). A kept recording is saved to Firestore with the rest of the state. The transcript of a recording includes every speaker; the lecturer-voice filter exists only in the live transcript.
 
 ### 2.8 Homework (UC14, UC15)
 
@@ -222,7 +222,7 @@ Not in the demo: a server-side background job and extracting audio on the server
 - Web application only; no native apps and no NFC or Bluetooth.
 - The class roster is provided by the lecturer; there is no integration with Moodle or the university portal.
 - Recordings are uploaded by the lecturer; there is no Zoom or Meet integration.
-- Storage is in memory (except the course catalogue file and, if configured, the passwords file). A restart or a new deployment on the free hosting plan erases sessions, assignments and submissions. A database behind the existing storage layer is designed (see the components document) and not part of the demo.
+- Storage is in memory, and a snapshot is saved to Firebase Cloud Firestore after every change and loaded on start, so a restart or a new deployment keeps sessions, recordings, assignments, submissions and passwords. A database behind the existing storage layer is designed (see the components document) and not part of the demo.
 - Students have a phone with a camera, a browser, and mobile data or campus Wi-Fi.
 - Indoor location accuracy is limited to tens of meters.
 - External AI services are used for ASR, people counting and LLM tasks; the exact tools are selected in the tools report.

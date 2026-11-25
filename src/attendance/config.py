@@ -64,6 +64,7 @@ class Config:
     # Identity and location are mandatory.
     REQUIRE_PIN = True                  # personal PIN per student (ties a person to a check-in on any phone)
     BLOCK_WITHOUT_LOCATION = True       # no location permission -> no check-in at all (when the class has a geofence)
+    FIREBASE_CREDENTIALS = os.environ.get("FIREBASE_CREDENTIALS", "")  # service-account JSON; empty = memory only
     PASSWORDS_PATH = os.environ.get("PASSWORDS_PATH", "")      # file that keeps chosen passwords across restarts (empty = memory only)
     SHOW_PASSWORDS = os.environ.get("SHOW_PASSWORDS", "1") == "1"   # demo/testing: the lecturer can download the chosen passwords
     REQUIRE_LECTURER_PASSWORD = True    # personal lecturer password, chosen on the first sign-in, in addition to the key

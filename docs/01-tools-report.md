@@ -20,9 +20,9 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Rotating QR | Signed value (HMAC), new every 5 s, drawn in the browser | Static QR, one-time codes stored in a database | No database needed; a photo of the screen expires in seconds. |
 | Location | Browser Geolocation API (`watchPosition`, high accuracy) | IP location, Wi-Fi name, Bluetooth beacons, a native app | Works in the browser with the student's permission and needs no hardware or app. |
 | Phone identity | Random device cookie + personal PIN + browser profile hash | Biometrics / passkeys (WebAuthn), SMS codes, personal links by email | The user decided against biometrics. A PIN needs no extra service. Passkeys remain a possible future upgrade. |
-| Storage | In memory behind `Repository` classes | SQLite, PostgreSQL | KISS for the demo; the classes can be swapped for a database. |
+| Storage | In memory behind `Repository` classes, saved as a snapshot to Firebase Cloud Firestore (free Spark plan) | SQLite, PostgreSQL, Firebase Storage | The free host erases its disk, so the database must be outside it. Firestore needs no credit card; Firebase Storage does, so files are saved inside Firestore in parts. |
 | Excel / CSV export | `openpyxl` and the standard `csv` module | Pandas | One small dependency. |
-| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 133 automated tests run in a few seconds, with one simulated phone per client. |
+| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 138 automated tests run in a few seconds, with one simulated phone per client. |
 | Hosting for the demo | Render (free web service, branch `demo-deploy`) | Local server, Cloudflare Tunnel, localhost.run, ngrok | See 3.4 and 3.5. |
 | People counting from a photo | Not adopted (adapter kept, manual count works) | Claude vision, Gemini vision | See 3.6. |
 
@@ -57,7 +57,7 @@ This report lists the tools we considered for the attendance tool, what we tried
 ### 3.5 Hosting limits found on Render (free plan)
 
 - A deploy takes 40-50 s after each commit.
-- The server **sleeps after inactivity** and wakes up in about 50 s; **all in-memory data is lost** when it sleeps or redeploys (sessions, check-ins, phone bindings, PINs).
+- The server **sleeps after inactivity** and wakes up in about 50 s; the memory is erased when it sleeps or redeploys. **Fix:** the state is saved to Cloud Firestore after every change and loaded when the server starts.
 - We therefore run one worker, open the page a few minutes before the demo, and export the sheet to Excel or CSV before closing.
 - Lesson learned: an environment variable typed into the wrong field (name and value swapped) silently gave the server a random lecturer key and a 403 error. The code now ignores spaces around the key.
 
@@ -109,12 +109,12 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Native app | Contradicts "nothing to install". |
 | Cloudflare Tunnel, localhost.run | Did not work on our network (3.4). |
 | Vision API for people counting | Not stable in our attempts (3.6). |
-| A database (SQLite, PostgreSQL) | The free hosting plan erases its disk on every deployment, so a local database would not keep the data; an outside free database was left as a future step (storage layer is already separate). |
+| A local database (SQLite) | The free hosting plan erases its disk on every deployment, so a local database would not keep the data. An outside database (Firestore) was used instead. |
 
 ## 5. Risks that remain
 
 - Indoor location accuracy of tens of meters.
-- The free server may sleep or restart during the demo; in-memory data is lost.
+- The free server may sleep or restart during the demo; it then loads the last saved state from Firestore (changes of the last seconds can be lost).
 - The free AI service can fail, be overloaded or run out of quota; the pages show the reason and the lecturer can test it before the demo.
 - A student can share a PIN; the system detects some cases (same coordinates, same phone profile) and does not claim to stop all of them.
 

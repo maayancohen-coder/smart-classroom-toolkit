@@ -24,6 +24,7 @@ from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
 from attendance.handwriting import GeminiTranscriber, HandwritingError, build_transcriber
+from attendance.persistence import Backend, StatePersistence, build_backend
 from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_common_mistakes_prompt, build_review_prompt, build_summary_prompt,
                                  build_transcript_fix_prompt,
                                  class_similarity, content_check)
@@ -45,7 +46,7 @@ def build_counter(config):
     return None
 
 
-def create_app(config: type[Config] = Config, roster: Roster | None = None) -> Flask:
+def create_app(config: type[Config] = Config, roster: Roster | None = None, state_backend: Backend | None = None) -> Flask:
     app = Flask(__name__)
     if config.TRUST_PROXY_HEADERS:
         # Behind a tunnel / reverse proxy: take the real client IP and scheme from X-Forwarded-*.
@@ -719,6 +720,20 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None) -> F
     homework = HomeworkStore()
     app.extensions["homework_store"] = homework
     app.extensions["transcriber"] = build_transcriber(config)   # tests replace it with a fake
+
+    # ---- saving the state (survives restarts and deployments) -----------------------
+    persistence = StatePersistence(state_backend or build_backend(config.FIREBASE_CREDENTIALS), {
+        "sessions": service.store, "devices": service.registry, "pins": service.pins,
+        "notes": notes, "messages": messages, "homework": homework})
+    app.extensions["persistence"] = persistence
+    persistence.load()
+    persistence.start()
+
+    @app.after_request
+    def mark_state_changed(response):
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            persistence.mark_dirty()
+        return response
     MIN_TEXT_CHARS = 40
     IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
