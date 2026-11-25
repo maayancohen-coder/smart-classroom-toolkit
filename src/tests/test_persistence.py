@@ -23,6 +23,8 @@ def test_without_a_database_nothing_is_saved():
     app = create_app(TestConfig)
     assert not app.extensions["persistence"].enabled
     assert app.extensions["persistence"].save_now() is False
+    assert app.test_client().get("/api/state-status").status_code == 403
+    assert lecturer_of(app).get("/api/state-status").get_json()["enabled"] is False
 
 
 def test_lectures_recordings_homework_and_passwords_survive_a_restart():

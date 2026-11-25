@@ -24,7 +24,7 @@ from attendance.courses import Catalog
 from attendance.notes import NoteBoard, TooFast
 from attendance.summary import summarize
 from attendance.handwriting import GeminiTranscriber, HandwritingError, build_transcriber
-from attendance.persistence import Backend, StatePersistence, build_backend
+from attendance.persistence import Backend, StatePersistence, build_backend, status as state_status_of
 from attendance.homework import (MIN_PEERS_FOR_STUDENTS, HomeworkStore, Submission, build_report, build_common_mistakes_prompt, build_review_prompt, build_summary_prompt,
                                  build_transcript_fix_prompt,
                                  class_similarity, content_check)
@@ -728,6 +728,11 @@ def create_app(config: type[Config] = Config, roster: Roster | None = None, stat
     app.extensions["persistence"] = persistence
     persistence.load()
     persistence.start()
+
+    @app.get("/api/state-status")
+    def state_status():
+        require_lecturer()
+        return jsonify(state_status_of(persistence))
 
     @app.after_request
     def mark_state_changed(response):

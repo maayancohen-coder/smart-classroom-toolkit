@@ -25,9 +25,15 @@ from typing import Callable, Optional
 
 log = logging.getLogger("course_hub.persistence")
 
+
+def _say(message: str) -> None:
+    """One clear line in the server log (Render shows stdout), easy to find with the word 'state'."""
+    print(f"[state] {message}", flush=True)
+
 BLOB_MIN_BYTES = 64 * 1024          # bytes values at least this big are saved once, as blobs
 PART_BYTES = 900 * 1024              # below the 1 MB document limit of Firestore
 SAVE_DELAY_SECONDS = 2.0             # wait a moment so a burst of changes is saved once
+INIT_ERROR = [""]                    # why Firestore could not be used, shown on /api/state-status
 _LOCK_TYPES = (type(threading.Lock()), type(threading.RLock()))
 
 
@@ -179,11 +185,13 @@ class StatePersistence:
         with self._save_lock:
             try:
                 self.backend.put_main(self.dump())
+                if not self.last_saved_at:
+                    _say(f"first snapshot saved to {self.backend.name}")
                 self.last_saved_at, self.last_error = time.time(), ""
                 return True
             except Exception as exc:                 # never break a request because the database failed
                 self.last_error = f"{type(exc).__name__}: {exc}"
-                log.warning("Saving the state failed: %s", self.last_error)
+                _say(f"saving FAILED: {self.last_error}")
                 return False
 
     def load(self) -> bool:
@@ -192,16 +200,17 @@ class StatePersistence:
         try:
             data = self.backend.get_main()
             if not data:
+                _say(f"connected to {self.backend.name}; no saved state yet")
                 return False
             saved = _Unpickler(io.BytesIO(data), self._load_blob).load()
             for name, fields in saved.items():
                 if name in self.objects:
                     self.objects[name].__dict__.update(fields)
-            log.info("State loaded from %s", self.backend.name)
+            _say(f"loaded the saved state from {self.backend.name}")
             return True
         except Exception as exc:                     # a damaged snapshot must not stop the server
             self.last_error = f"{type(exc).__name__}: {exc}"
-            log.warning("Loading the state failed: %s", self.last_error)
+            _say(f"loading FAILED: {self.last_error}")
             return False
 
     def _load_blob(self, key: str) -> bytes:
@@ -236,9 +245,18 @@ class StatePersistence:
 def build_backend(credentials_json: str) -> Optional[Backend]:
     """Firestore when credentials are configured; otherwise None (memory only)."""
     if not credentials_json.strip():
+        _say("FIREBASE_CREDENTIALS is not set; memory only")
         return None
     try:
         return FirestoreBackend(credentials_json)
     except Exception as exc:
-        log.warning("Firestore is not available, keeping the state in memory only: %s", exc)
+        INIT_ERROR[0] = f"{type(exc).__name__}: {exc}"
+        _say(f"Firestore is not available ({INIT_ERROR[0]}); memory only")
         return None
+
+
+def status(persistence: "StatePersistence") -> dict:
+    """What the lecturer sees on /api/state-status."""
+    return {"enabled": persistence.enabled, "backend": persistence.backend.name if persistence.backend else "none",
+            "last_saved_at": persistence.last_saved_at, "last_error": persistence.last_error,
+            "init_error": INIT_ERROR[0]}
