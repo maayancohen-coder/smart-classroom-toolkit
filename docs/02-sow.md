@@ -4,7 +4,7 @@ Status: v2 (updated for what was built)
 
 ## 1. Purpose
 
-This document states what we will deliver for Exercise 2 of Intro to Software Engineering, what is left out, how we will know the work is done, and what could go wrong. It is the agreement between the two authors and the course staff.
+This document states what we will deliver for Exercise 2 of Intro to Software Engineering, what is left out, how we will know the work is done, and what could go wrong. It is the plan the two authors set for the exercise.
 
 ## 2. Background
 
@@ -65,10 +65,8 @@ The assignment is due on 26 November 2026.
 | Date | Milestone |
 |---|---|
 | Done | README, use cases, SRS, components, diagrams, testing strategy, attendance demo on a real iPhone, tools report, SoW, demo script |
-| Done (21-22 Nov) | Course portal, transcript and recording upload, homework tool with AI review, English interface, documents updated for what was built |
-| 18-20 Nov | SoW, demo script, update SRS and tests document for the PIN and the removed photo count |
-| 21-23 Nov | Designs for the polls, comments, transcript and homework tools; one small experiment each for the last two |
-| 24 Nov | Consistency check of all documents and the traceability tables; summary |
+| Done (to 22 Nov) | Course portal, transcript and recording upload, homework tool with AI review, English interface, polls and comments designs, documents updated for what was built, merge into `main` |
+| 23-24 Nov | Consistency check of all documents and the traceability tables; summary |
 | 25 Nov | Full rehearsal of the 10-minute demo on the university network |
 | 26 Nov | Submission and presentation |
 
@@ -91,7 +89,7 @@ The assignment is due on 26 November 2026.
 | Location became mandatory | A student who refuses location can no longer mark attendance. |
 | Crowd-based location check added | Indoor GPS is accurate to tens of meters; the group of students gives a better centre than one point. |
 
-The SRS and the testing strategy now describe what was built; the README and the class and sequence diagrams (document 06) were not rewritten for the new tools and still show the earlier design.
+All documents now describe what was built. In the class and sequence diagrams (document 06) the first design stays in sections 1.4, 1.5, 2.4 and 2.5, and sections 1.6, 2.6 and 2.7 show the demo as built.
 
 ## 10. Risks
 

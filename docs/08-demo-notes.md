@@ -85,7 +85,7 @@ Steps 2 to 6 were confirmed by hand on a real phone during development and are a
 | 2 | Submit a typed or scanned solution, open **View my submission** | The status shows Submitted and the file opens |
 | 3 | Sign in as the lecturer, open the assignment report, press **AI review** on one student | A Hebrew review with strengths, mistakes and suggestions |
 | 4 | Press **Common mistakes (AI)** | The mistakes that repeat across the class and what to re-teach |
-| 5 | Open the transcript page of a lecture, show the result of a short recording and the summary | A transcript with corrected terms and a summary that can be published |
+| 5 | Open the transcript page of a lecture, show the result of a short recording and the summary, and publish it | A transcript with corrected terms and a summary; the student then sees the summary, the transcript and the recording player |
 
 If the AI service is slow or fails, show the live test button, read the reason, and continue with the recorded video.
 
