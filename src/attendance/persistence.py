@@ -18,6 +18,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 import pickle
 import threading
 import time
@@ -153,6 +154,9 @@ class StatePersistence:
         self._dirty = threading.Event()
         self._save_lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
+        self._pid = 0
+        self.saves = 0
+        self.saving_since = 0.0
         self.last_error = ""
         self.last_saved_at = 0.0
 
@@ -188,6 +192,7 @@ class StatePersistence:
                 if not self.last_saved_at:
                     _say(f"first snapshot saved to {self.backend.name}")
                 self.last_saved_at, self.last_error = time.time(), ""
+                self.saves += 1
                 return True
             except Exception as exc:                 # never break a request because the database failed
                 self.last_error = f"{type(exc).__name__}: {exc}"
@@ -221,10 +226,14 @@ class StatePersistence:
     def mark_dirty(self) -> None:
         if self.enabled:
             self._dirty.set()
+            self.start()          # make sure the saver runs in this process (a pre-forking server copies no threads)
 
     def start(self) -> None:
-        if not self.enabled or self._thread is not None:
+        if not self.enabled:
             return
+        if self._thread is not None and self._thread.is_alive() and self._pid == os.getpid():
+            return
+        self._pid = os.getpid()
         self._thread = threading.Thread(target=self._loop, name="state-saver", daemon=True)
         self._thread.start()
         atexit.register(self._save_if_dirty)    # a deployment stops the old server; keep its last changes
@@ -236,10 +245,15 @@ class StatePersistence:
 
     def _loop(self) -> None:
         while True:
-            self._dirty.wait()
-            time.sleep(SAVE_DELAY_SECONDS)
-            self._dirty.clear()
-            self.save_now()
+            try:
+                self._dirty.wait()
+                time.sleep(SAVE_DELAY_SECONDS)
+                self._dirty.clear()
+                self.saving_since = time.time()
+                self.save_now()
+                self.saving_since = 0.0
+            except Exception as exc:            # keep the saver alive whatever happens
+                self.last_error = f"{type(exc).__name__}: {exc}"
 
 
 def build_backend(credentials_json: str) -> Optional[Backend]:
@@ -259,4 +273,6 @@ def status(persistence: "StatePersistence") -> dict:
     """What the lecturer sees on /api/state-status."""
     return {"enabled": persistence.enabled, "backend": persistence.backend.name if persistence.backend else "none",
             "last_saved_at": persistence.last_saved_at, "last_error": persistence.last_error,
-            "init_error": INIT_ERROR[0]}
+            "init_error": INIT_ERROR[0], "saves": persistence.saves, "pending": persistence._dirty.is_set(),
+            "saving_for_seconds": round(time.time() - persistence.saving_since) if persistence.saving_since else 0,
+            "saver_running": bool(persistence._thread and persistence._thread.is_alive() and persistence._pid == os.getpid())}
