@@ -4,6 +4,10 @@ Smart classroom toolkit: reliable attendance verification and AI-assisted tools 
 
 Course: Intro to Software Engineering (I2SE) - Exercise 2
 
+**Live site:** https://attendance-demo-2lrh.onrender.com (free server: the first visit after a quiet period can take about a minute)
+
+**Explainer video (2 min, English, narrated):** [docs/media/course-hub-video.mp4](docs/media/course-hub-video.mp4) - the problem, the product, the process and what failed on the way.
+
 ## The problem
 
 Teaching tools in class are often slow, easy to fake, or require installing yet another app. The clearest example is attendance. Today students fill it in themselves, in one of two ways:
