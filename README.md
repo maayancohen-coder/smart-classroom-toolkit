@@ -6,7 +6,11 @@ Course: Intro to Software Engineering (I2SE) - Exercise 2
 
 **Live site:** https://attendance-demo-2lrh.onrender.com (free server: the first visit after a quiet period can take about a minute)
 
-**Explainer video (2 min, English, narrated):** [docs/media/course-hub-video.mp4](docs/media/course-hub-video.mp4) - the problem, the product, the process and what failed on the way.
+**Explainer video (2 min, English, narrated):** the problem, the product, the process and what failed on the way.
+
+https://github.com/user-attachments/assets/e294f5ec-8077-4bfe-9fd3-5d2e64b115be
+
+Full-quality copy: [docs/media/course-hub-video.mp4](docs/media/course-hub-video.mp4)
 
 ## The problem
 
