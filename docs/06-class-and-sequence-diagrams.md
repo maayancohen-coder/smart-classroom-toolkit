@@ -419,7 +419,7 @@ classDiagram
     PinStore ..> Course
 ```
 
-The data is kept in memory, so it is lost when the free server restarts (document 08).
+The data is kept in memory and saved to Firestore after every change, so it survives a restart.
 
 ## 2. Sequence diagrams
 
@@ -687,7 +687,7 @@ sequenceDiagram
 | `PeopleCounter`, `SpeechToText`, `LLMClient`, `ReportExporter` | **Adapter / dependency inversion** | The system depends on our interface. A provider is replaced, or faked in a test, without changing the rest. |
 | `Transcriber` (`GeminiTranscriber`, `ClaudeTranscriber`) | **Adapter** | The demo reads scans, transcribes audio and completes text through one interface. The model is a setting (`GEMINI_MODEL`). |
 | `AttendanceService`, `MediaService`, `HomeworkService` | **Facade** | The API layer calls one simple entry point per tool. |
-| `DeviceRegistry`, `TicketStore`, `Roster` | **Repository** | Storage is hidden. In the demo it is in memory, and it can become a database later. |
+| `DeviceRegistry`, `TicketStore`, `Roster` | **Repository** | Storage is hidden. In the demo it is in memory, and a snapshot of it is saved to Firestore. |
 | `AttendanceEvaluator` | **Single responsibility** | It only combines results. It does not know how any check works. |
 | `Fake...` classes | **Testability** | Every external service has a fake, used by the tests in document 07. |
 

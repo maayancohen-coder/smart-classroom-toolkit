@@ -20,9 +20,9 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Rotating QR | Signed value (HMAC), new every 5 s, drawn in the browser | Static QR, one-time codes stored in a database | No database needed; a photo of the screen expires in seconds. |
 | Location | Browser Geolocation API (`watchPosition`, high accuracy) | IP location, Wi-Fi name, Bluetooth beacons, a native app | Works in the browser with the student's permission and needs no hardware or app. |
 | Phone identity | Random device cookie + personal PIN + browser profile hash | Biometrics / passkeys (WebAuthn), SMS codes, personal links by email | The user decided against biometrics. A PIN needs no extra service. Passkeys remain a possible future upgrade. |
-| Storage | In memory behind `Repository` classes | SQLite, PostgreSQL | KISS for the demo; the classes can be swapped for a database. |
+| Storage | In memory behind `Repository` classes, saved as a snapshot to Firebase Cloud Firestore (free Spark plan) | SQLite, PostgreSQL, Firebase Storage | The free host erases its disk, so the database must be outside it. Firestore needs no credit card; Firebase Storage does, so files are saved inside Firestore in parts. |
 | Excel / CSV export | `openpyxl` and the standard `csv` module | Pandas | One small dependency. |
-| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 133 automated tests run in a few seconds, with one simulated phone per client. |
+| Tests | `pytest` and the Flask test client | `unittest`, Selenium | 138 automated tests run in a few seconds, with one simulated phone per client. |
 | Hosting for the demo | Render (free web service, branch `demo-deploy`) | Local server, Cloudflare Tunnel, localhost.run, ngrok | See 3.4 and 3.5. |
 | People counting from a photo | Not adopted (adapter kept, manual count works) | Claude vision, Gemini vision | See 3.6. |
 
@@ -57,7 +57,7 @@ This report lists the tools we considered for the attendance tool, what we tried
 ### 3.5 Hosting limits found on Render (free plan)
 
 - A deploy takes 40-50 s after each commit.
-- The server **sleeps after inactivity** and wakes up in about 50 s; **all in-memory data is lost** when it sleeps or redeploys (sessions, check-ins, phone bindings, PINs).
+- The server **sleeps after inactivity** and wakes up in about 50 s; the memory is erased when it sleeps or redeploys. **Fix:** the state is saved to Cloud Firestore after every change and loaded when the server starts.
 - We therefore run one worker, open the page a few minutes before the demo, and export the sheet to Excel or CSV before closing.
 - Lesson learned: an environment variable typed into the wrong field (name and value swapped) silently gave the server a random lecturer key and a 403 error. The code now ignores spaces around the key.
 
@@ -93,7 +93,7 @@ This report lists the tools we considered for the attendance tool, what we tried
   1. The default model `gemini-2.5-flash` answered 404 ("no longer available to new users"). We changed the default to `gemini-3.8-flash` and made the model a setting (`GEMINI_MODEL`).
   2. Requests then returned 503 ("high demand"). We added retries with waiting.
   3. Requests then ended in a timeout after 110 s, even for the simplest question ("reply OK"). A first guess blamed the thinking setting of the new model; the live test button showed the real cause: a 429 (quota exceeded) on `gemini-3.8-flash` for our free key, which our retries had hidden behind the waiting. A spent quota now fails at once with its reason.
-  4. The list of models available to the key (a button on the homework page) showed many alternatives. `gemini-3.1-flash-lite` answered "OK" in 1.6 seconds and is what the hosted site now uses.
+  4. The list of models available to the key (a button on the homework page) showed many alternatives. `gemini-3.1-flash-lite` answered "OK" in 1.6 seconds. It is what the hosted site uses and now also the default in the code.
   5. The first AI review of a correct typed submission (linear algebra, determinant) reached the right conclusion but wrote its own re-calculation inside the answer under "Mistakes" ("wait, let me re-calculate ... no mistakes found") and did not name every correct question. The instructions now ask for conclusions only, "none found" when there is no mistake, and a list of the correct questions, and for the whole review to be written in Hebrew. The new wording was not yet compared with the old one on the same submission.
   6. An uploaded lecture recording was transcribed by hand on the hosted site and produced a transcript (one run; its length and accuracy were not recorded). The browser flow was also run on a 13-minute generated video, which was cut into three parts, with a fake service.
 - **Decisions:** the model name and the key are settings; the lecturer has a live test of the AI service and a list of available models; every AI text is marked as a suggestion; names and ID numbers are removed before sending; a student's AI requests are limited to one per 30 seconds.
@@ -109,12 +109,12 @@ This report lists the tools we considered for the attendance tool, what we tried
 | Native app | Contradicts "nothing to install". |
 | Cloudflare Tunnel, localhost.run | Did not work on our network (3.4). |
 | Vision API for people counting | Not stable in our attempts (3.6). |
-| A database (SQLite, PostgreSQL) | The free hosting plan erases its disk on every deployment, so a local database would not keep the data; an outside free database was left as a future step (storage layer is already separate). |
+| A local database (SQLite) | The free hosting plan erases its disk on every deployment, so a local database would not keep the data. An outside database (Firestore) was used instead. |
 
 ## 5. Risks that remain
 
 - Indoor location accuracy of tens of meters.
-- The free server may sleep or restart during the demo; in-memory data is lost.
+- The free server may sleep or restart during the demo; it then loads the last saved state from Firestore (changes of the last seconds can be lost).
 - The free AI service can fail, be overloaded or run out of quota; the pages show the reason and the lecturer can test it before the demo.
 - A student can share a PIN; the system detects some cases (same coordinates, same phone profile) and does not claim to stop all of them.
 

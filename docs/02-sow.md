@@ -4,7 +4,7 @@ Status: v2 (updated for what was built)
 
 ## 1. Purpose
 
-This document states what we will deliver for Exercise 2 of Intro to Software Engineering, what is left out, how we will know the work is done, and what could go wrong. It is the agreement between the two authors and the course staff.
+This document states what we will deliver for Exercise 2 of Intro to Software Engineering, what is left out, how we will know the work is done, and what could go wrong. It is the plan the two authors set for the exercise.
 
 ## 2. Background
 
@@ -38,7 +38,7 @@ Attendance in class is slow or easy to fake. A shared QR code can be photographe
 | Biometrics (fingerprint, face) and passkeys | Decided against for privacy |
 | Counting people from a class photo | Dropped after the attempts in the tools report (section 3.6); the manual head-count entry and the gap logic remain |
 | Moodle / Zoom integration, native apps, Bluetooth / NFC | Not required, or not available in the iPhone browser |
-| A database and self-registration | The demo keeps data in memory; the storage classes can be replaced later. Users are not registered by the system: students come from the roster file and lecturers from the course catalogue file |
+| A relational database and self-registration | The demo keeps data in memory and saves a snapshot to Firestore; a full database schema is future work. Users are not registered by the system: students come from the roster file and lecturers from the course catalogue file |
 
 ## 5. Deliverables and acceptance criteria
 
@@ -46,7 +46,7 @@ Attendance in class is slow or easy to fake. A shared QR code can be photographe
 |---|---|---|
 | D1 | Attendance demo, hosted and reachable from a phone | The lecturer opens a session, a phone scans the QR code, and the check-in appears on the lecturer page. A check-in without location permission is refused. |
 | D2 | Cheating scenarios | A second student marked from the same phone (private window) is shown as suspect or refused; a wrong PIN is refused; a photographed old QR code is rejected. All three were exercised on a real phone. |
-| D3 | Automated tests | All automated tests pass (133 at the time of writing: attendance scenarios, head count, portal, transcript, slides, homework, passwords and recordings). |
+| D3 | Automated tests | All automated tests pass (138 at the time of writing: attendance scenarios, head count, portal, transcript, slides, homework, passwords, recordings and saved state). |
 | D4 | Tools report | Every tool has a reason and, where we tried it, a real result, including the failures of the AI service (retired model name, overload, quota). |
 | D5 | SRS, use cases, components, diagrams, testing strategy | Every must requirement of the attendance tool is traced to a use case and to a test (traceability tables). |
 | D6 | Demo script | A rehearsed 10-minute script with a fallback if the network fails. |
@@ -65,10 +65,8 @@ The assignment is due on 26 November 2026.
 | Date | Milestone |
 |---|---|
 | Done | README, use cases, SRS, components, diagrams, testing strategy, attendance demo on a real iPhone, tools report, SoW, demo script |
-| Done (21-22 Nov) | Course portal, transcript and recording upload, homework tool with AI review, English interface, documents updated for what was built |
-| 18-20 Nov | SoW, demo script, update SRS and tests document for the PIN and the removed photo count |
-| 21-23 Nov | Designs for the polls, comments, transcript and homework tools; one small experiment each for the last two |
-| 24 Nov | Consistency check of all documents and the traceability tables; summary |
+| Done (to 22 Nov) | Course portal, transcript and recording upload, homework tool with AI review, English interface, polls and comments designs, documents updated for what was built, merge into `main` |
+| 23-24 Nov | Consistency check of all documents and the traceability tables; summary |
 | 25 Nov | Full rehearsal of the 10-minute demo on the university network |
 | 26 Nov | Submission and presentation |
 
@@ -91,7 +89,7 @@ The assignment is due on 26 November 2026.
 | Location became mandatory | A student who refuses location can no longer mark attendance. |
 | Crowd-based location check added | Indoor GPS is accurate to tens of meters; the group of students gives a better centre than one point. |
 
-The SRS and the testing strategy now describe what was built; the README and the class and sequence diagrams (document 06) were not rewritten for the new tools and still show the earlier design.
+All documents now describe what was built. In the class and sequence diagrams (document 06) the first design stays in sections 1.4, 1.5, 2.4 and 2.5, and sections 1.6, 2.6 and 2.7 show the demo as built.
 
 ## 10. Risks
 

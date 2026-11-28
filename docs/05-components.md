@@ -72,7 +72,7 @@ flowchart LR
 
 | Component | Responsibility | Requirements |
 |---|---|---|
-| **API layer** | Routes requests, checks that lecturer functions are called only by an authenticated lecturer, limits request rate, returns JSON and pages | NFR-3, NFR-6 |
+| **API layer** | Routes requests, checks that lecturer functions are called only by an authenticated lecturer, returns JSON and pages | NFR-3 |
 | **Session service** | Creates and closes sessions; holds the session secret, classroom location, radius and trusted network; loads the class roster | FR-1 to FR-4 |
 | **Attendance service** | Generates and verifies rotating tokens; creates check-in tickets; runs the attendance checks and the evaluator; keeps the device binding; computes the head-count gap | FR-5 to FR-24 |
 | **Report exporter** | Builds the attendance sheet and exports it to Excel and CSV | FR-25 to FR-28 |
@@ -151,10 +151,10 @@ The design above (separate services, a job runner, three external services) is k
 | Homework service | `homework.py` (assignments, submissions with the original file, similarity, course-content check, report, redaction, prompts), `handwriting.py` (reading of scans and photos) |
 | Portal | `courses.py` (course catalogue file `data/courses.json`), `notes.py` (live notes and messages with rate limits) |
 | Background job runner | Not built. Long work is done part by part by the browser (recording parts, transcript repair), one short request each, with progress shown on the page. |
-| Data store and temporary files | In memory behind repository classes. The catalogue file lives in the repository; the passwords file is optional. Uploaded files are kept in memory with the submission. |
+| Data store and temporary files | In memory behind repository classes, with a snapshot saved to Firebase Cloud Firestore after every change (`StatePersistence`). Large files are saved once, in parts below the 1 MB document limit. The catalogue file lives in the repository. |
 | Speech-to-text, LLM | One adapter, `Transcriber`, with two implementations (Gemini and Claude). It offers `transcribe` (image or PDF to text), `transcribe_audio` (audio to text, Gemini only) and `complete` (text to text). Chosen by which API key is set. A fake implements it in the tests. |
 | People counter | Not in the demo (typed head count) |
 
 Safety around the AI adapter: names and ID numbers are removed before text is sent (`redact`), submitted text is marked as data between markers so that it is not obeyed as an instruction, a student can call the AI at most once every 30 seconds, a spent quota fails at once with its reason, other overload errors are retried with waiting, and the lecturer has a live test of the AI service (`/api/ai-status`).
 
-Deployment as built: one Gunicorn process on the Render free plan, deployed automatically from the `demo-deploy` branch. The free plan sleeps and a new deployment erases the memory; the AI key, model and lecturer key are environment variables.
+Deployment as built: one Gunicorn process on the Render free plan, deployed automatically from the `demo-deploy` branch. The free plan sleeps and a new deployment erases the memory, so the state is loaded back from Firestore on start; the AI key, model and lecturer key are environment variables.

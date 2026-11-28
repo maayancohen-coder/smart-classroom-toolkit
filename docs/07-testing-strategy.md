@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Status: v2 (133 automated tests)
+Status: v2 (138 automated tests)
 
 This document explains how we check that the system does what the SRS requires. It is organized around the classes in document 06, because each class is tested on its own and then together with the others.
 
@@ -146,7 +146,7 @@ Each scenario uses a separate simulated phone.
 | Head count (typed) with a gap above 10% | Gap reported, suspect check-ins highlighted | FR-23, FR-24, FR-24a |
 | Comment sent anonymously | No author in the lecturer view | FR-33 |
 
-133 automated tests are written and passing in the demo code:
+138 automated tests are written and passing in the demo code:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -158,6 +158,7 @@ Each scenario uses a separate simulated phone.
 | `test_homework.py` | 26 | Assignments, submissions, report, similarity, course-content check, scans through the reader, AI review, redaction, retry and quota handling, student feedback and class comparison, common mistakes, bulk import, opening the uploaded file, AI status, Hebrew prompts |
 | `test_passwords.py` | 5 | PIN and password chosen once, lecturer download, persistence in a file, hiding the values |
 | `test_recording.py` | 7 | Audio parts, errors, text repair, AI summary, saving, lecturer-only access |
+| `test_persistence.py` | 5 | Lectures, recordings, assignments and passwords survive a restart, a file is uploaded once, locks are recreated, a damaged snapshot does not stop the server, a change marks the state for saving |
 
 All external services are replaced by fakes in these tests, so they check our code and the shape of the requests, not the quality of the AI answers.
 
@@ -167,7 +168,7 @@ All external services are replaced by fakes in these tests, so they check our co
 
 - A request to any lecturer route without authentication is refused (NFR-3).
 - A forged, modified or replayed token or ticket is refused (NFR-1, NFR-2).
-- Many check-in attempts from one client are limited (NFR-6).
+- Repeated wrong PINs from one client are locked out (FR-9b). General rate limiting (NFR-6) is future work.
 - The device cookie is not readable by page scripts (NFR-5).
 
 ### 7.2 Privacy

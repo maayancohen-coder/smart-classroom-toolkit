@@ -1,6 +1,6 @@
 # Summary
 
-Status: v2 (updated for what was built; the open items are in section 5)
+Status: v2 (updated for what was built)
 
 ## 1. What we built
 
@@ -12,7 +12,7 @@ A web-based attendance tool that works from the phone browser with nothing to in
 - checks that explain themselves: every suspect check-in shows its reasons to the lecturer, and the student never sees the status;
 - a live lecturer page with the attendance sheet, a typed head count with the gap, and Excel/CSV export;
 - lecturer approval of a suspect check-in (the checks flag, the lecturer decides), with the reasons kept and the approval reversible;
-- 133 automated tests, one simulated phone per scenario.
+- 138 automated tests, one simulated phone per scenario.
 
 On the same site (Course Hub, English interface) we also built:
 
@@ -40,7 +40,7 @@ Polls and comments are covered by design documents only.
 - Indoor location is accurate to tens of meters; it cannot tell two neighbouring rooms apart.
 - A student can give the PIN to a friend, and the first person to enter a student's ID chooses that student's PIN (the lecturer can reset it).
 - Two phones of the same model look alike, so the phone profile is only a weak signal.
-- Data is kept in memory; the free server sleeps and forgets it. The sheet must be exported before closing.
+- Data is saved to Firestore as a snapshot, not in a relational schema; changes of the last seconds before a crash can be lost.
 - Adding a student manually after the lecture is closed (FR-28) is designed but not implemented in the demo.
 - General rate limiting (NFR-6) and a load test for 200 students (NFR-12) are not done; only the AI calls of a student are limited.
 - Uploaded recordings and homework are sent to an external AI service. Names and ID numbers are removed from homework first, but a lecture recording contains voices; the free tier may use submitted data. Real student data needs a paid tier or an agreement.
@@ -51,10 +51,8 @@ Polls and comments are covered by design documents only.
 
 ## 5. Still to complete
 
-- Designs for polls and comments are written; they are not built.
 - A full rehearsal of the 10-minute demo on the university network, including the AI test button and a short recording.
-- Check the README and the class and sequence diagrams (document 06), which still show the earlier design.
-- This section is to be removed when the items above are done.
+- Polls and comments have designs only; they are not built.
 
 ## 6. What we learned
 

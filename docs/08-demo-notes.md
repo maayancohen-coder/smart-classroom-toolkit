@@ -11,7 +11,7 @@ The live demo shows the attendance tool; the portal, the transcript and the home
 | Structure | Flask routes only in `app.py`; all logic in the `attendance` package | The web layer can change without touching the rules |
 | Rules | One `AttendanceCheck` class per rule (Strategy); an evaluator combines them | A new rule is a new class; each rule has its own test |
 | Decision | One strong failure, or two weak failures, makes a check-in suspect | Avoids accusing a student because of one noisy signal |
-| Storage | In memory behind repository classes | No database to set up; replaceable later |
+| Storage | In memory, snapshot saved to Firebase Cloud Firestore | Survives restarts and deployments; no credit card needed |
 | Hosting | Render free plan, branch `demo-deploy` | Works from a phone on any network, with HTTPS |
 | Student feedback | The student sees only "recorded", never the status | A cheater learns nothing about which signal tripped |
 
@@ -73,7 +73,7 @@ Steps 2 to 6 were confirmed by hand on a real phone during development and are a
 | What if a student gives a friend the PIN? | Then it is a deliberate act we cannot prevent; other signals (same coordinates, same phone profile) can still flag it. |
 | Why no fingerprint or face? | Privacy. A PIN is simple and stores nothing about the body. |
 | Why can GPS not tell the exact room? | Indoor accuracy is tens of meters. The rotating QR and the group of students cover the room level. |
-| What data is stored? | Student ID, time, coordinates, a hash of the PIN, and the reasons. It is kept in memory in the demo. |
+| What data is stored? | Student ID, time, coordinates, a hash of the PIN, and the reasons. It is kept in memory and saved to Firestore. |
 | Why was the photo count dropped? | The free vision service gave no stable result in our tests; the design remains and the manual count works. |
 | Does it scale to 200 students? | The checks are cheap; for real use the in-memory storage would be replaced by a database and several servers. |
 
@@ -85,7 +85,7 @@ Steps 2 to 6 were confirmed by hand on a real phone during development and are a
 | 2 | Submit a typed or scanned solution, open **View my submission** | The status shows Submitted and the file opens |
 | 3 | Sign in as the lecturer, open the assignment report, press **AI review** on one student | A Hebrew review with strengths, mistakes and suggestions |
 | 4 | Press **Common mistakes (AI)** | The mistakes that repeat across the class and what to re-teach |
-| 5 | Open the transcript page of a lecture, show the result of a short recording and the summary | A transcript with corrected terms and a summary that can be published |
+| 5 | Open the transcript page of a lecture, show the result of a short recording and the summary, and publish it | A transcript with corrected terms and a summary; the student then sees the summary, the transcript and the recording player |
 
 If the AI service is slow or fails, show the live test button, read the reason, and continue with the recorded video.
 

@@ -4,6 +4,10 @@ Smart classroom toolkit: reliable attendance verification and AI-assisted tools 
 
 Course: Intro to Software Engineering (I2SE) - Exercise 2
 
+**Live site:** https://attendance-demo-2lrh.onrender.com (free server: the first visit after a quiet period can take about a minute)
+
+**Explainer video (2 min, English, narrated):** [docs/media/course-hub-video.mp4](docs/media/course-hub-video.mp4) - the problem, the product, the process and what failed on the way.
+
 ## The problem
 
 Teaching tools in class are often slow, easy to fake, or require installing yet another app. The clearest example is attendance. Today students fill it in themselves, in one of two ways:
@@ -53,7 +57,7 @@ The lecturer creates a question in seconds and students answer from their phone.
 
 | Level | Tools | What we deliver |
 |---|---|---|
-| **1: demo + full design** | Reliable attendance | Full design documents and a working demo (133 automated tests) |
+| **1: demo + full design** | Reliable attendance | Full design documents and a working demo (138 automated tests) |
 | **2: full design** | Quick polls, student comments | Full design documents. Of these, only live notes from students and messages to the lecturer are built; polls are design only |
 | **3: design + experiment, then built** | Transcript and summary, homework review | Use cases, components, chosen tools, an experiment, and a working version in the demo that uses an external AI service |
 
@@ -73,7 +77,7 @@ The lecturer creates a question in seconds and students answer from their phone.
 - If a photo is used, students in the back rows may be hard to count, so the gap has a tolerance (10% of the check-ins).
 - A student can give the personal PIN to a friend, and the first person to enter a student's ID chooses the PIN (the lecturer can reset it). The system flags some of these cases but does not claim to stop all of them.
 - Speech-to-text accuracy on Hebrew lectures with English technical terms was not measured, so we make no claim about it. The glossary correction can be wrong, which is why the lecturer can undo it.
-- Everything is kept in memory on a free server, so assignments, transcripts, recordings and passwords are lost when it restarts or sleeps.
+- The data is used in memory and saved to Firebase Cloud Firestore (free plan) a few seconds after every change, so lectures, recordings, assignments and passwords come back after a restart. Changes in the last seconds before a crash can be lost.
 - LLM output can be wrong. Summaries and reviews are presented as suggestions for a human to check.
 - Recordings contain students' voices, and homework comparison involves other students' work. Both need consent and privacy rules, described in the SRS.
 
